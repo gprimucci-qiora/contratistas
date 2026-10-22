@@ -17,11 +17,13 @@
     '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4 }
   };
   function matchC(name) { var n = norm(name); for (var i = 0; i < CONTRATISTAS.length; i++) if (CONTRATISTAS[i].re.test(n)) return CONTRATISTAS[i]; return null; }
+  // Busca el HC del contratista en el mes; si el mes no lo trae, usa el último mes anterior que sí.
   function hcFor(id, monthKey) {
-    var ks = Object.keys(HC_MES).filter(function (k) { return k <= monthKey; }).sort();
-    if (!ks.length) return null;
-    var row = HC_MES[ks[ks.length - 1]]; return row[id] || null;
+    var ks = Object.keys(HC_MES).filter(function (k) { return k <= monthKey; }).sort().reverse();
+    for (var i = 0; i < ks.length; i++) { var v = HC_MES[ks[i]][id]; if (v != null && v !== '') return +v; }
+    return null;
   }
+
   var FESTIVOS = ['2026-01-01', '2026-02-02', '2026-03-16', '2026-05-01', '2026-09-16', '2026-11-16', '2026-12-25'];
   var P = { base: { A: 480, B: 440, LM: 530 }, soporte: 40, reco: 150, festMin: 3, festBono: 350,
             metaDias: 25, metaProd: 3.5, diasMes: 26, pasoProd: 20, penal: 15 };
@@ -149,6 +151,7 @@
   function mainTipo(tecs) { var c = {}; tecs.forEach(function (t) { c[t.tipo] = (c[t.tipo] || 0) + 1; });
     return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0] || 'A'; }
 
-  root.Calc = { compute: compute, iso: iso, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
+  root.Calc = { compute: compute, iso: iso, CONTRATISTAS: CONTRATISTAS, hcFor: hcFor,
+    getHC: function () { return JSON.parse(JSON.stringify(HC_MES)); }, setHC: function (o) { HC_MES = o || {}; }, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
   if (typeof module !== 'undefined') module.exports = root.Calc;
 })(typeof self !== 'undefined' ? self : this);
