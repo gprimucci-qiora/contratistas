@@ -265,6 +265,8 @@ table.tb tr.grpRow td{background:#fff;font-size:12px;font-weight:800;letter-spac
 .ac b{font-size:16px;margin-top:6px}
 .ac span{font-size:14px;color:var(--g5);margin-top:4px}
 .ac.ok{background:var(--qg-lt);border-color:var(--qg-md)}
+.ac.warn{background:var(--amb-lt);border-color:#f5dd9e}.ac.warn .g{color:var(--amb-dk)}
+.ac .g{font-size:26px}
 .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
 .col{background:#fff;border:1px solid var(--g2);border-radius:18px;overflow:hidden}
 .col-h{padding:16px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--g2)}
@@ -495,35 +497,34 @@ function render(){
   var normal=c.precioTipo-c.adjAsist-c.adjProd, aP=c.proy.asistReal, pP=c.proy.prodReal;
   function adj(n){return n>0?'+$'+n:n<0?'−$'+(-n):'$0'}
   function bar(v,max,goal,ok){return '<div class="bar"><i style="width:'+Math.min(100,v/max*100)+'%;background:'+(ok?'var(--qg)':'var(--red)')+'"></i><u style="left:'+(goal/max*100)+'%"></u></div>'}
-  h+='<div class="hero"><div class="c-money"><div><div class="l">Si sigue así, este mes cobra</div><div class="v">'+fmt(c.cierre)+'<sup>*</sup></div>'+
-     '<div class="s">Lleva <b>'+fmt(c.cobrado)+'</b> al '+corteD+' de '+mesN+'</div>'+(c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
+  h+='<div class="hero"><div class="c-money"><div><div class="l">Así vas al '+corteD+' de '+mesN+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
+     '<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>'+(c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
      '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
   h+='<div class="c-price"><div class="top"><span class="l">Precio por folio</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">precio normal '+fmt(normal)+'</div><div class="why">'+
-     '<div class="w"><div class="t">Días trabajados<span>'+aP.toFixed(1)+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,aP>=24.5)+'</div>'+
+     '<div class="w"><div class="t">Días trabajados<span>'+aP.toFixed(1)+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
      '<div class="w"><div class="t">Folios al día<span>'+pP.toFixed(1)+' por cuadrilla · meta 3.5</span></div><div class="a '+(c.adjProd>0?'up':'z')+'">'+adj(c.adjProd)+'</div>'+bar(pP,5,3.5,pP>=3.5)+'</div>'+
      '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
   // 3. acciones
   var G={r:[],a:[],g:[]}; c.tecs.forEach(function(t,i){t._i=i;G[t.grupo].push(t)});
-  var acts=[];
-  if(c.opVac)acts.push({g:c.opVac.gana,t:'Cubrir '+(vac>1?vac+' lugares vacíos':'el lugar vacío'),s:'Trabaja con '+c.activos+' de '+c.hc+' cuadrillas autorizadas.'});
-  if(c.opAsist&&c.opAsist.gana>0)acts.push({g:c.opAsist.gana,t:'Que no falten',s:'Con '+c.opAsist.faltan+' días más de trabajo en total, su precio sube a '+fmt(c.opAsist.precioNuevo)+'.'});
-  if(G.a.length)acts.push({g:null,t:'Apoyar a '+G.a.length+' técnico'+(G.a.length>1?'s':''),s:'Están cerca de la meta. Ver la columna amarilla abajo.'});
-  h+='<div class="blk"><div class="blk-h"><span class="t">Qué hacer para ganar más</span><span class="s">de aquí al cierre del mes</span></div><div class="acts3">';
-  if(!acts.length)h+='<div class="ac ok"><div class="g">✓</div><b>Va al máximo</b><span>Mantener asistencia y productividad.</span></div>';
-  acts.slice(0,3).forEach(function(a){h+='<div class="ac">'+(a.g?'<div class="g">+'+fmt(a.g)+'</div>':'<div class="g na">Sube tu promedio</div>')+'<b>'+a.t+'</b><span>'+a.s+'</span></div>'});
+  var st=[
+    {ok:!vac,v:c.activos+' de '+c.hc,t:'Cuadrillas trabajando',s:vac?(vac+' lugar'+(vac>1?'es':'')+' de tu HC autorizado sin cubrir.'):'Tu HC autorizado está completo.'},
+    {ok:c.adjAsist>=0,v:aP.toFixed(1)+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla. Hoy cuenta como '+c.proy.asist+'.'},
+    {ok:c.proy.prod>=3.5,v:pP.toFixed(1)+' folios',t:'Folios al día',s:'Meta: 3.5 folios al día por cuadrilla.'}];
+  h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">estimado al cierre del mes</span></div><div class="acts3">';
+  st.forEach(function(a){h+='<div class="ac'+(a.ok?' ok':' warn')+'"><div class="g">'+(a.ok?'✓ ':'')+a.v+'</div><b>'+a.t+'</b><span>'+a.s+'</span></div>'});
   h+='</div></div>';
   // 4. técnicos
   G.r.sort(function(a,b){return a.d-b.d});G.a.sort(function(a,b){return a.dProj-b.dProj});G.g.sort(function(a,b){return b.prodT-a.prodT});
   function row(t,msg){return '<button class="pr" onclick="openTec('+t._i+')"><div><div class="nm">'+esc(titleName(t.nombre))+'</div><div class="ms">'+msg+'</div></div><div class="dd">'+t.d+'<small>días</small></div></button>'}
   h+='<div class="blk"><div class="blk-h"><span class="t">Su equipo</span><span class="s">Clic en un técnico para ver su detalle</span></div><div class="cols">';
-  h+='<div class="col r"><div class="col-h"><span class="d"></span><span class="t">No van a llegar</span><span class="n">'+(G.r.length+vac)+'</span></div><div class="col-s">Aunque vengan diario no llegan a 25 días.</div>';
+  h+='<div class="col r"><div class="col-h"><span class="d"></span><span class="t">Debajo de la meta</span><span class="n">'+(G.r.length+vac)+'</span></div><div class="col-s">No alcanzan 25 días este mes.</div>';
   if(vac)h+='<div class="pr vac"><div><div class="nm">'+vac+' lugar'+(vac>1?'es':'')+' vacío'+(vac>1?'s':'')+'</div><div class="ms">Cuenta'+(vac>1?'n':'')+' como 0 días</div></div><div class="dd">0<small>días</small></div></div>';
   G.r.forEach(function(t){h+=row(t,'Máximo llega a '+Math.round(t.maxPos)+' días')});
   if(!G.r.length&&!vac)h+='<div class="emp">Nadie 👏</div>';
-  h+='</div><div class="col a"><div class="col-h"><span class="d"></span><span class="t">Pueden llegar</span><span class="n">'+G.a.length+'</span></div><div class="col-s">Con un poco más llegan a la meta.</div>';
-  G.a.forEach(function(t){h+=row(t,t.dProj<24.5?'<strong>No debe faltar</strong> más':'<strong>+'+t.faltaFolSem+' folios</strong> por semana')});
+  h+='</div><div class="col a"><div class="col-h"><span class="d"></span><span class="t">Cerca de la meta</span><span class="n">'+G.a.length+'</span></div><div class="col-s">Pueden llegar a la meta si mantienen el ritmo.</div>';
+  G.a.forEach(function(t){h+=row(t,t.dProj<24.5?'Necesita trabajar todos los días que quedan':'Le faltan '+t.faltaFolSem+' folios por semana para 3.5 al día')});
   if(!G.a.length)h+='<div class="emp">Nadie</div>';
-  h+='</div><div class="col g"><div class="col-h"><span class="d"></span><span class="t">Van muy bien</span><span class="n">'+G.g.length+'</span></div><div class="col-s">En meta de días y folios.</div>';
+  h+='</div><div class="col g"><div class="col-h"><span class="d"></span><span class="t">En meta</span><span class="n">'+G.g.length+'</span></div><div class="col-s">En meta de días y folios.</div>';
   G.g.forEach(function(t){h+=row(t,t.prodT.toFixed(1)+' folios al día')});
   if(!G.g.length)h+='<div class="emp">Nadie todavía</div>';
   h+='</div></div></div>';
