@@ -1,6 +1,6 @@
 # CONTEXT — Avance de Contratistas (QiORA Conecta)
 
-> Leer esto al retomar el proyecto. Última actualización: 2026-10-22.
+> Leer esto al retomar el proyecto. Última actualización: 2026-11-02.
 
 ## Qué es
 Página web estática (GitHub Pages) para que la **coordinadora de contratistas** vea cómo va cada contratista en el mes bajo el **nuevo esquema "destajo con póliza"** y descargue un HTML individual por contratista para mandárselo (WhatsApp, captura).
@@ -34,7 +34,8 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Igu
 - Soporte = precio − 40. Recolección = $150.
 - **Pronóstico**: días hábiles = lunes–sábado del mes (octubre 2026 = 27). Cada técnico sigue su ritmo: días_proy = d + (d/días_pasados)·días_restantes (tope total del mes); folios/día trabajado constante.
 - Grupos técnico: **Debajo de la meta** (máx posible < 25 días), **Cerca de la meta**, **En meta** (≥24.5 días proy y ≥3.5 folios/día sobre 26).
-- **Marco Anaya excluido** (se trabajará aparte: debería medirse por distrito; HC PDF 59 vs Excel 48).
+- **Marco Anaya incluido como UN solo contratista** (decisión Giacomo 2026-11-02: un HC y un ajuste de precio para todos sus distritos, no por distrito). HC = 59 (PDF; el Excel de cálculo traía 48). Precio por técnico según su tipo (León/Tepic/Colima B, GDL A, López Mateos LM).
+- **Mes cerrado** = no quedan días hábiles después del corte (`cerrado`): se ocultan folios/costos estimados y solo se muestran los realizados.
 - Festivos 2026 en `FESTIVOS`.
 
 ## HC autorizado
@@ -49,6 +50,7 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Igu
 2. **Resumen del mes** (landing): costo estimado del mes, costo a la fecha, precio promedio ponderado, días/cuadrilla, folios/día, folios vs póliza, tabla por contratista con totales.
 3. **Contratista**: encabezado (HC, trabajando X de HC, tipo, días restantes) · "Así vas" (cobrado a la fecha; estimado al cierre secundario) · precio por folio con ajustes · "Cómo vas contra tu meta" (cuadrillas, días, folios) · su equipo en 3 columnas · pop-up por técnico (KPIs, folios por tipo, calendario diario) · pop-up Reglas (póliza, ajustes, tabla A/B/LM con casilla actual, soporte/reco/festivo, vigencia 3 meses).
 4. **HC autorizado**: matriz editable.
+   Resumen incluye: folios realizados MTD (y estimados si el mes no ha cerrado), **Alertas** (cuadrillas vs HC: vacantes y exceso; técnicos sin actividad ≥3 días hábiles seguidos sin folios al corte; productividad muy alta ≥6 folios por día trabajado — umbrales en `ALERTA` de index.html) y **Ranking** top 10 mejores / peores técnicos de todos los contratistas por folios al día sobre 26 (`prodT`). Clic en un técnico abre su detalle.
 Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip).
 
 ## Archivos
@@ -62,7 +64,6 @@ Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip
 - Omar (18 de 17) y Esmeralda (11 de 10) traen más cuadrillas que HC en octubre: ¿correcto o cambió el HC?
 - Octubre tiene 27 días hábiles lun–sáb; productividad se mide sobre 26. Confirmar criterio.
 - Pronóstico: ritmo de todo el mes vs más peso a última semana (no decidido; hoy = todo el mes).
-- Marco Anaya: esquema por distrito, versión aparte.
 - Estado de cuenta oficial de cierre de mes del nuevo esquema (segundo proyecto, mismo motor).
 - Logo en alta resolución/SVG (hoy recorte de PNG de la hoja de marca).
 - Hallazgos del Excel de cálculo de sep-2026 (columna "Real" desalineada en Glosario, recolecciones en festivo no pagadas, fila Total hasta 162, flotantes sin ROUND) — ver memoria del proyecto.

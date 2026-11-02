@@ -268,6 +268,7 @@ table.tb tr.grpRow td{background:#fff;font-size:12px;font-weight:800;letter-spac
 .ac.warn{background:var(--amb-lt);border-color:#f5dd9e}.ac.warn .g{color:var(--amb-dk)}
 .ac .g{font-size:26px}
 .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+.cols.cols2{grid-template-columns:1fr 1fr}
 .col{background:#fff;border:1px solid var(--g2);border-radius:18px;overflow:hidden}
 .col-h{padding:16px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--g2)}
 .col-h .d{width:11px;height:11px;border-radius:50%}
@@ -302,7 +303,8 @@ table.rs{width:100%;border-collapse:collapse;font-size:14px}
 table.rs th{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--g4);padding:14px 16px;text-align:left;border-bottom:1px solid var(--g2);white-space:nowrap}
 table.rs td{padding:14px 16px;border-bottom:1px solid var(--g1);white-space:nowrap}
 table.rs tbody tr{cursor:pointer}table.rs tbody tr:hover td{background:#fafaf8}
-table.rs .r{text-align:right}table.rs td.nm{font-weight:700;white-space:normal}
+table.rs .r{text-align:right}table.rs td.nm{font-weight:700;white-space:normal;min-width:210px}
+table.rs th,table.rs td{padding-left:12px!important;padding-right:12px!important}
 table.rs td.ok{color:var(--qg);font-weight:700}table.rs td.bad{color:var(--red);font-weight:700}
 table.rs tfoot td{font-weight:800;border-top:2px solid var(--ink);border-bottom:none;background:#fafafa}
 .hcbar{display:flex;align-items:center;gap:10px;margin:22px 0 14px;flex-wrap:wrap}
@@ -340,7 +342,7 @@ table.hcm input::placeholder{color:var(--g4);font-weight:500}
   .blk{margin-top:30px}
   .blk-h{flex-direction:column;gap:2px}
   .blk-h .t{font-size:18px}
-  .acts3,.cols{grid-template-columns:1fr;gap:12px}
+  .acts3,.cols,.cols.cols2{grid-template-columns:1fr;gap:12px}
   .ac{padding:18px 20px}.ac .g{font-size:26px}
   .xbar .xl{display:none}
   .xbar div{padding:12px 16px}.xbar img{height:24px}.xbar button{padding:8px 11px;font-size:13px}
@@ -539,34 +541,68 @@ function navTop(){
          '<button class="nv'+(VIEW==='hc'?' on':'')+'" onclick="go(\'hc\')">✎ HC autorizado'+(HC_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>';
 }
 
+var ALERTA={sinAct:3, prodAlta:6}; // días hábiles seguidos sin folios · folios por día trabajado
+function n0(n){return Math.round(n||0).toLocaleString('en-US')}
+function fechaC(k){return k?(+k.slice(8,10))+' '+MES_C[+k.slice(5,7)-1]:'—'}
 function renderRes(){
   sidebar(); window.scrollTo(0,0);
   var mk=RES.monthKey, mesN=MESES[+mk.slice(5,7)-1], corteD=+RES.corte.slice(8,10);
   var L=RES.contratistas.filter(function(c){return !c.error}), E=RES.contratistas.filter(function(c){return c.error});
   var T={hc:0,act:0,cob:0,cie:0,fh:0,fp:0,dp:0,pf:0};
   L.forEach(function(c){T.hc+=c.hc;T.act+=c.activos;T.cob+=c.cobrado;T.cie+=c.cierre;T.fh+=c.hoy.folios;T.fp+=c.folios;T.dp+=c.dias;T.pf+=c.precioTipo*c.folios});
-  var asis=T.hc?T.dp/T.hc:0, prod=T.hc?T.fp/T.hc/26:0, precio=T.fp?T.pf/T.fp:0, poliza=T.hc*91, c0=L[0]||{};
-  var h='<div class="pg wide"><div class="pg-h"><div class="ey">Resumen de '+mesN+' '+mk.slice(0,4)+' · datos al '+corteD+' de '+mesN+'</div><h1>Todos los contratistas</h1>'+
-    '<div class="meta"><span><b>'+L.length+'</b> contratistas</span><span>HC autorizado: <b>'+T.hc+'</b></span><span>Trabajando: <b class="'+(T.act<T.hc?'bad':'')+'">'+T.act+'</b></span><span>Día hábil <b>'+(c0.pasH||0)+' de '+(c0.totH||0)+'</b></span><span>Sin Marco Anaya</span></div></div>';
-  h+='<div class="hero"><div class="c-money"><div><div class="l">Costo estimado del mes, al ritmo actual</div><div class="v">'+fmt(T.cie)+'<sup>*</sup></div>'+
-     '<div class="s">Costo a la fecha: <b>'+fmt(T.cob)+'</b> al '+corteD+' de '+mesN+'</div></div><div class="n">* Antes de descuentos. Estimado, no oficial.</div></div>'+
-     '<div class="c-price"><div class="top"><span class="l">Precio promedio por folio</span><span class="v">'+fmt(precio)+'</span></div><div class="nrm" style="text-align:right">ponderado por folios estimados</div><div class="why">'+
-     '<div class="w"><div class="t">Días por cuadrilla<span>estimado al cierre · meta 25</span></div><div class="a '+(asis>=25?'up':'dn')+'">'+asis.toFixed(1)+'</div></div>'+
-     '<div class="w"><div class="t">Folios al día<span>estimado al cierre · meta 3.5</span></div><div class="a '+(prod>=3.5?'up':'dn')+'">'+prod.toFixed(2)+'</div></div>'+
-     '<div class="w"><div class="t">Folios del mes<span>estimado vs póliza de '+poliza.toLocaleString('en-US')+'</span></div><div class="a">'+Math.round(T.fp).toLocaleString('en-US')+'</div></div>'+
+  var asis=T.hc?T.dp/T.hc:0, prod=T.hc?T.fp/T.hc/26:0, precio=T.fp?T.pf/T.fp:0, poliza=T.hc*91, c0=L[0]||{}, fin=!!c0.cerrado;
+  var h='<div class="pg wide"><div class="pg-h"><div class="ey">Resumen de '+mesN+' '+mk.slice(0,4)+' · datos al '+corteD+' de '+mesN+(fin?' · mes cerrado':'')+'</div><h1>Todos los contratistas</h1>'+
+    '<div class="meta"><span><b>'+L.length+'</b> contratistas</span><span>HC autorizado: <b>'+T.hc+'</b></span><span>Trabajando: <b class="'+(T.act<T.hc?'bad':'')+'">'+T.act+'</b></span><span>Día hábil <b>'+(c0.pasH||0)+' de '+(c0.totH||0)+'</b></span></div></div>';
+  h+='<div class="hero"><div class="c-money"><div><div class="l">'+(fin?'Costo del mes':'Costo estimado del mes, al ritmo actual')+'</div><div class="v">'+fmt(fin?T.cob:T.cie)+'<sup>*</sup></div>'+
+     (fin?'<div class="s">Mes completo: <b>'+n0(T.fh)+' folios</b></div>':'<div class="s">Costo a la fecha: <b>'+fmt(T.cob)+'</b> al '+corteD+' de '+mesN+'</div>')+'</div><div class="n">* Antes de descuentos. '+(fin?'No oficial.':'Estimado, no oficial.')+'</div></div>'+
+     '<div class="c-price"><div class="top"><span class="l">Precio promedio por folio</span><span class="v">'+fmt(precio)+'</span></div><div class="nrm" style="text-align:right">ponderado por folios'+(fin?'':' estimados')+'</div><div class="why">'+
+     '<div class="w"><div class="t">Días por cuadrilla<span>'+(fin?'del mes':'estimado al cierre')+' · meta 25</span></div><div class="a '+(asis>=25?'up':'dn')+'">'+asis.toFixed(1)+'</div></div>'+
+     '<div class="w"><div class="t">Folios al día<span>'+(fin?'del mes':'estimado al cierre')+' · meta 3.5</span></div><div class="a '+(prod>=3.5?'up':'dn')+'">'+prod.toFixed(2)+'</div></div>'+
+     '<div class="w"><div class="t">Folios realizados<span>al '+corteD+' de '+mesN+' · póliza '+n0(poliza)+'</span></div><div class="a">'+n0(T.fh)+'</div></div>'+
+     (fin?'':'<div class="w"><div class="t">Folios estimados<span>al cierre, al ritmo actual</span></div><div class="a">'+n0(T.fp)+'</div></div>')+
      '</div></div></div>';
+  h+=alertas(L)+ranking(L);
   // tabla
   var rows=L.slice().sort(function(a,b){return b.cierre-a.cierre});
   h+='<div class="blk"><div class="blk-h"><span class="t">Por contratista</span><span class="s">Clic para ver el detalle</span></div><div class="tw2"><table class="rs"><thead><tr>'+
-     '<th>Contratista</th><th class="r">HC</th><th class="r">Trabajando</th><th class="r">Días / cuadrilla</th><th class="r">Folios / día</th><th class="r">Precio</th><th class="r">Folios est.</th><th class="r">Costo a la fecha*</th><th class="r">Costo estimado*</th></tr></thead><tbody>';
+     '<th>Contratista</th><th class="r">HC</th><th class="r">Trabajando</th><th class="r">Días / cuadrilla</th><th class="r">Folios / día</th><th class="r">Precio</th><th class="r">Folios MTD</th>'+(fin?'':'<th class="r">Folios est.</th>')+'<th class="r">'+(fin?'Costo del mes*':'Costo a la fecha*')+'</th>'+(fin?'':'<th class="r">Costo estimado*</th>')+'</tr></thead><tbody>';
   rows.forEach(function(c){var i=RES.contratistas.indexOf(c), a=c.proy.asistReal, p=c.proy.prodReal;
     h+='<tr onclick="pick('+i+')"><td class="nm">'+esc(titleName(c.nombre))+'</td><td class="r">'+c.hc+'</td><td class="r '+(c.activos<c.hc?'bad':'')+'">'+c.activos+'</td>'+
        '<td class="r '+(c.proy.asist>=25?'ok':'bad')+'">'+a.toFixed(1)+'</td><td class="r '+(c.proy.prod>=3.5?'ok':'bad')+'">'+p.toFixed(2)+'</td>'+
-       '<td class="r"><b>'+fmt(c.precioTipo)+'</b></td><td class="r">'+Math.round(c.folios).toLocaleString('en-US')+'</td><td class="r">'+fmt(c.cobrado)+'</td><td class="r"><b>'+fmt(c.cierre)+'</b></td></tr>'});
-  h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+T.hc+'</td><td class="r">'+T.act+'</td><td class="r">'+asis.toFixed(1)+'</td><td class="r">'+prod.toFixed(2)+'</td><td class="r">'+fmt(precio)+'</td><td class="r">'+Math.round(T.fp).toLocaleString('en-US')+'</td><td class="r">'+fmt(T.cob)+'</td><td class="r">'+fmt(T.cie)+'</td></tr></tfoot></table></div></div>';
+       '<td class="r"><b>'+fmt(c.precioTipo)+'</b></td><td class="r">'+n0(c.hoy.folios)+'</td>'+(fin?'':'<td class="r">'+n0(c.folios)+'</td>')+'<td class="r">'+(fin?'<b>'+fmt(c.cobrado)+'</b>':fmt(c.cobrado))+'</td>'+(fin?'':'<td class="r"><b>'+fmt(c.cierre)+'</b></td>')+'</tr>'});
+  h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+T.hc+'</td><td class="r">'+T.act+'</td><td class="r">'+asis.toFixed(1)+'</td><td class="r">'+prod.toFixed(2)+'</td><td class="r">'+fmt(precio)+'</td><td class="r">'+n0(T.fh)+'</td>'+(fin?'':'<td class="r">'+n0(T.fp)+'</td>')+'<td class="r">'+fmt(T.cob)+'</td>'+(fin?'':'<td class="r">'+fmt(T.cie)+'</td>')+'</tr></tfoot></table></div></div>';
   if(E.length)h+='<div class="err" style="margin-top:16px">Sin HC autorizado en '+mesN+': '+E.map(function(c){return esc(titleName(c.nombre))}).join(', ')+'. Agrégalo en <a style="color:inherit;font-weight:800;cursor:pointer" onclick="go(\'hc\')">HC autorizado</a>.</div>';
-  h+='<div class="foot">* Montos estimados antes de descuentos, sujetos a cambios y no garantizados. Excluye a Marco Anaya. HC tomado de '+HC_SRC+(HC_DIRTY?' + cambios locales sin publicar':'')+'.</div></div>';
+  h+='<div class="foot">* Montos '+(fin?'':'estimados ')+'antes de descuentos, sujetos a cambios y no garantizados. HC tomado de '+HC_SRC+(HC_DIRTY?' + cambios locales sin publicar':'')+'.</div></div>';
   $('view').innerHTML=h;
+}
+function allTecs(L){var a=[];L.forEach(function(c){var ci=RES.contratistas.indexOf(c);c.tecs.forEach(function(t,ti){a.push({t:t,c:c,ci:ci,ti:ti})})});return a}
+function tRow(x,msg,val,sub,cls){return '<button class="pr" onclick="IDX='+x.ci+';openTec('+x.ti+')"><div><div class="nm">'+esc(titleName(x.t.nombre))+'</div><div class="ms">'+esc(titleName(x.c.nombre))+' · '+msg+'</div></div><div class="dd"'+(cls?' style="color:var(--'+cls+')"':'')+'>'+val+'<small>'+sub+'</small></div></button>'}
+function alertas(L){
+  var A=allTecs(L);
+  var hcA=L.filter(function(c){return c.activos!==c.hc}).sort(function(a,b){return Math.abs(b.activos-b.hc)-Math.abs(a.activos-a.hc)});
+  var sa=A.filter(function(x){return x.t.sinAct>=ALERTA.sinAct}).sort(function(a,b){return b.t.sinAct-a.t.sinAct});
+  var pa=A.filter(function(x){return x.t.fpdT>=ALERTA.prodAlta}).sort(function(a,b){return b.t.fpdT-a.t.fpdT});
+  var h='<div class="blk"><div class="blk-h"><span class="t">Alertas</span><span class="s">'+(hcA.length+sa.length+pa.length)+' en total</span></div><div class="cols">';
+  h+='<div class="col r"><div class="col-h"><span class="d"></span><span class="t">Cuadrillas vs HC</span><span class="n">'+hcA.length+'</span></div><div class="col-s">Trabajando distinto a lo autorizado.</div>';
+  hcA.forEach(function(c){var d=c.activos-c.hc, i=RES.contratistas.indexOf(c);
+    h+='<button class="pr" onclick="pick('+i+')"><div><div class="nm">'+esc(titleName(c.nombre))+'</div><div class="ms">'+c.activos+' trabajando de '+c.hc+' autorizadas · '+(d<0?(-d)+' vacante'+(d<-1?'s':''):d+' de más')+'</div></div><div class="dd">'+(d>0?'+':'')+d+'<small>'+(d<0?'vac.':'exceso')+'</small></div></button>'});
+  if(!hcA.length)h+='<div class="emp">Todos completos</div>';
+  h+='</div><div class="col a"><div class="col-h"><span class="d"></span><span class="t">Sin actividad</span><span class="n">'+sa.length+'</span></div><div class="col-s">'+ALERTA.sinAct+' o más días hábiles seguidos sin folios al corte.</div>';
+  sa.slice(0,15).forEach(function(x){h+=tRow(x,'último folio '+fechaC(x.t.ultimo),x.t.sinAct,'días')});
+  if(sa.length>15)h+='<div class="emp">y '+(sa.length-15)+' más</div>';
+  if(!sa.length)h+='<div class="emp">Nadie</div>';
+  h+='</div><div class="col a"><div class="col-h"><span class="d" style="background:#6b4fd8"></span><span class="t">Productividad muy alta</span><span class="n">'+pa.length+'</span></div><div class="col-s">'+ALERTA.prodAlta+' o más folios por día trabajado. Revisar.</div>';
+  pa.slice(0,15).forEach(function(x){h+=tRow(x,(x.t.fol+x.t.fest)+' folios en '+x.t.d+' días',x.t.fpdT.toFixed(1),'fol/día')});
+  if(pa.length>15)h+='<div class="emp">y '+(pa.length-15)+' más</div>';
+  if(!pa.length)h+='<div class="emp">Nadie</div>';
+  return h+'</div></div></div>';
+}
+function ranking(L){
+  var A=allTecs(L).sort(function(a,b){return b.t.prodT-a.t.prodT}), top=A.slice(0,10), bot=A.slice(-10).reverse();
+  var h='<div class="blk"><div class="blk-h"><span class="t">Ranking de técnicos</span><span class="s">folios al día sobre 26 días'+(RES.contratistas[0]&&RES.contratistas[0].cerrado?'':' · estimado al cierre')+' · meta 3.5</span></div><div class="cols cols2">';
+  function col(lst,cls,t){var s='<div class="col '+cls+'"><div class="col-h"><span class="d"></span><span class="t">'+t+'</span><span class="n">'+lst.length+'</span></div>';
+    lst.forEach(function(x,k){s+=tRow(x,(k+1)+'° · '+x.t.d+' días · '+(x.t.fol+x.t.fest)+' folios MTD',x.t.prodT.toFixed(1),'fol/día')});return s+'</div>'}
+  return h+col(top,'g','Top 10 mejores')+col(bot,'r','Top 10 peores')+'</div></div>';
 }
 
 function renderHC(){
@@ -582,7 +618,7 @@ function renderHC(){
     HC_MESES.forEach(function(k){var v=M[k]&&M[k][ct.id]!=null?M[k][ct.id]:'', inh=v===''?Calc.hcFor(ct.id,k):null;
       h+='<td class="'+(k===cur?'cur':'')+'"><input inputmode="numeric" value="'+v+'" placeholder="'+(inh!=null?inh:'–')+'" data-id="'+ct.id+'" data-m="'+k+'" onchange="editHC(this)"></td>'});
     h+='</tr>'});
-  h+='</tbody></table></div><div class="foot">Marco Anaya se maneja aparte y no está en esta matriz.</div></div>';
+  h+='</tbody></table></div></div>';
   $('view').innerHTML=h;
 }
 function editHC(el){
@@ -632,13 +668,13 @@ function renderC(){
   var h='<div class="pg"><div class="pg-h"><div class="ey">Avance de '+mesN+' '+mk.slice(0,4)+' · datos al '+corteD+' de '+mesN+'</div><h1>'+esc(titleName(c.nombre))+'</h1>';
   if(c.error){$('view').innerHTML=h+'</div><div class="err">'+c.error+'. Agrega su HC en el código.</div></div>';return}
   var vac=c.vacantes;
-  h+='<div class="meta"><span>HC autorizado: <b>'+c.hc+' cuadrillas</b></span><span>Trabajando: <b class="'+(vac?'bad':'')+'">'+c.activos+' de '+c.hc+'</b></span><span>'+(c.tipoPrincipal==='LM'?'Tabla López Mateos':'Distritos Tipo '+c.tipoPrincipal)+'</span><span>Faltan <b>'+c.restH+' días</b> hábiles</span></div></div>';
+  h+='<div class="meta"><span>HC autorizado: <b>'+c.hc+' cuadrillas</b></span><span>Trabajando: <b class="'+(vac?'bad':'')+'">'+c.activos+' de '+c.hc+'</b></span><span>'+(c.tipoPrincipal==='LM'?'Tabla López Mateos':'Distritos Tipo '+c.tipoPrincipal)+'</span><span>Folios realizados: <b>'+Math.round(c.hoy.folios).toLocaleString('en-US')+'</b>'+(c.cerrado?'':' · estimado al cierre <b>'+Math.round(c.folios).toLocaleString('en-US')+'</b>')+'</span><span>'+(c.cerrado?'<b>Mes cerrado</b>':'Faltan <b>'+c.restH+' días</b> hábiles')+'</span></div></div>';
   // 1. dinero + 2. precio
   var normal=c.precioTipo-c.adjAsist-c.adjProd, aP=c.proy.asistReal, pP=c.proy.prodReal;
   function adj(n){return n>0?'+$'+n:n<0?'−$'+(-n):'$0'}
   function bar(v,max,goal,ok){return '<div class="bar"><i style="width:'+Math.min(100,v/max*100)+'%;background:'+(ok?'var(--qg)':'var(--red)')+'"></i><u style="left:'+(goal/max*100)+'%"></u></div>'}
-  h+='<div class="hero"><div class="c-money"><div><div class="l">Así vas al '+corteD+' de '+mesN+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
-     '<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>'+(c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
+  h+='<div class="hero"><div class="c-money"><div><div class="l">'+(c.cerrado?'Cerraste '+mesN+' con':'Así vas al '+corteD+' de '+mesN)+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
+     (c.cerrado?'':'<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>')+(!c.cerrado&&c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
      '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
   h+='<div class="c-price"><div class="top"><span class="l">Precio por folio</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">precio normal '+fmt(normal)+'</div><div class="why">'+
      '<div class="w"><div class="t">Días trabajados<span>'+aP.toFixed(1)+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
@@ -650,7 +686,7 @@ function renderC(){
     {ok:!vac,v:c.activos+' de '+c.hc,t:'Cuadrillas trabajando',s:vac?(vac+' lugar'+(vac>1?'es':'')+' de tu HC autorizado sin cubrir.'):'Tu HC autorizado está completo.'},
     {ok:c.adjAsist>=0,v:aP.toFixed(1)+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla. Hoy cuenta como '+c.proy.asist+'.'},
     {ok:c.proy.prod>=3.5,v:pP.toFixed(1)+' folios',t:'Folios al día',s:'Meta: 3.5 folios al día por cuadrilla.'}];
-  h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">estimado al cierre del mes</span></div><div class="acts3">';
+  h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">'+(c.cerrado?'mes completo':'estimado al cierre del mes')+'</span></div><div class="acts3">';
   st.forEach(function(a){h+='<div class="ac'+(a.ok?' ok':' warn')+'"><div class="g">'+(a.ok?'✓ ':'')+a.v+'</div><b>'+a.t+'</b><span>'+a.s+'</span></div>'});
   h+='</div></div>';
   // 4. técnicos

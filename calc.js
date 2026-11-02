@@ -10,11 +10,12 @@
     { id: 'ELI', nombre: 'Elizabeth Zavala / Mario Maciel', re: /ELIZABETH ZAVALA/ },
     { id: 'ORT', nombre: 'María Gpe Ortiz / Andrés Ortiz', re: /ORTIZ/ },
     { id: 'MIG', nombre: 'Miguel Ángel Esquivel', re: /MIGUEL ANGEL ESQUIVEL/ },
-    { id: 'JPV', nombre: 'Juan Pablo Valencia / Grupo Onwars', re: /JUAN PABLO VALENCIA|AGUSTIN VALENCIA|ONWARS/ }
+    { id: 'JPV', nombre: 'Juan Pablo Valencia / Grupo Onwars', re: /JUAN PABLO VALENCIA|AGUSTIN VALENCIA|ONWARS/ },
+    { id: 'MA', nombre: 'Marco Anaya', re: /MARCO ANAYA/ }
   ];
   var HC_MES = {
-    '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4 },
-    '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4 }
+    '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 },
+    '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 }
   };
   function matchC(name) { var n = norm(name); for (var i = 0; i < CONTRATISTAS.length; i++) if (CONTRATISTAS[i].re.test(n)) return CONTRATISTAS[i]; return null; }
   // Busca el HC del contratista en el mes; si el mes no lo trae, usa el último mes anterior que sí.
@@ -68,17 +69,24 @@
     var byC = {};
     Object.keys(per).forEach(function (u) {
       var x = per[u], t = tecnicos[u], c = norm(t.contratista);
-      if (c === 'MARCO ANAYA') return;
       var d = Object.keys(x.dias).length;
       var rate = Math.min(1, d / Math.max(1, pasH));
       var addD = rate * restH;
       var fpd = d ? (x.fol / d) : 0;
       var k = addD > 0 && d ? (x.fol + fpd * addD) / x.fol : 1;
+      // Días hábiles seguidos sin folios hasta el corte (lun–sáb)
+      var sinAct = 0, ultimo = '';
+      Object.keys(x.dias).forEach(function (k) { if (k > ultimo) ultimo = k; });
+      for (var dd = corteDia; dd >= 1; dd--) {
+        var kk = monthKey + '-' + String(dd).padStart(2, '0');
+        if (x.dias[kk]) break;
+        if (new Date(y, m, dd).getDay() !== 0) sinAct++;
+      }
       var tipo = /GLM|LOPEZ MATEOS/i.test(t.sucursal) ? 'LM' : (t.tipo === 'A' || /INT-(GBA|GES|GPR)/.test(t.sucursal) ? 'A' : 'B');
       var tec = { u: u, nombre: t.nombre || u, sucursal: t.sucursal, dist: (t.sucursal.match(/INT-([A-Z]+)/) || [, ''])[1], tipo: tipo,
         d: d, dProj: Math.min(totH, d + addD), maxPos: d + restH,
         fol: x.fol, folProj: x.fol + fpd * addD, sop: x.sop, reco: x.reco, fest: x.fest, k: k,
-        porDia: x.dias, porTipo: x.porTipo, fpd: fpd };
+        porDia: x.dias, porTipo: x.porTipo, fpd: fpd, sinAct: sinAct, ultimo: ultimo, fpdT: d ? (x.fol + x.fest) / d : 0 };
       var ent = matchC(c), key = ent ? ent.id : c;
       (byC[key] = byC[key] || { id: ent && ent.id, nombre: ent ? ent.nombre : titleCase(t.contratista), tecs: [] }).tecs.push(tec);
     });
@@ -87,7 +95,7 @@
       var C = byC[c], hc = C.id ? hcFor(C.id, monthKey) : null;
       var sumD = 0, sumDP = 0, sumF = 0, sumFP = 0;
       C.tecs.forEach(function (t) { sumD += t.d; sumDP += t.dProj; sumF += t.fol; sumFP += t.folProj; });
-      var r = { nombre: C.nombre, hc: hc, activos: C.tecs.length, corte: corte, totH: totH, pasH: pasH, restH: restH, tecs: C.tecs };
+      var r = { id: C.id, nombre: C.nombre, hc: hc, cerrado: restH === 0, activos: C.tecs.length, corte: corte, totH: totH, pasH: pasH, restH: restH, tecs: C.tecs };
       if (!hc) { r.error = 'Sin HC autorizado'; return r; }
       function evalPrice(sDP, sFP) {
         var a = Math.floor(sDP / hc), p = Math.floor(sFP / hc / P.diasMes * 10) / 10;
