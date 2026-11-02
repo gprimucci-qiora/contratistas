@@ -51,6 +51,7 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Igu
 3. **Contratista**: encabezado (HC, trabajando X de HC, tipo, días restantes) · "Así vas" (cobrado a la fecha; estimado al cierre secundario) · precio por folio con ajustes · "Cómo vas contra tu meta" (cuadrillas, días, folios) · su equipo en 3 columnas · pop-up por técnico (KPIs, folios por tipo, calendario diario) · pop-up Reglas (póliza, ajustes, tabla A/B/LM con casilla actual, soporte/reco/festivo, vigencia 3 meses).
 4. **HC autorizado**: matriz editable.
    Resumen incluye: folios realizados MTD (y estimados si el mes no ha cerrado), **Alertas** (cuadrillas vs HC: vacantes y exceso; técnicos sin actividad ≥3 días hábiles seguidos sin folios al corte; productividad muy alta ≥6 folios por día trabajado — umbrales en `ALERTA` de index.html) y **Ranking** top 10 mejores / peores técnicos de todos los contratistas por folios al día sobre 26 (`prodT`). Clic en un técnico abre su detalle.
+   Contratista con 2+ sucursales: bloque **Por sucursal** (filtro por sucursal + tabla tipo dinámica sucursal → técnicos con días, folios, folios/día, monto a la fecha y estimado). El filtro también acota "Su equipo". Las vacantes solo se muestran en "Todas". Funciona igual en el HTML descargado.
 Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip).
 
 ## Archivos

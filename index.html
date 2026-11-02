@@ -322,6 +322,13 @@ table.hcm td.cur{background:var(--qg-lt)}
 table.hcm input{width:48px;border:1px solid transparent;border-radius:6px;padding:6px 4px;text-align:center;font:inherit;font-weight:700;background:transparent}
 table.hcm input:hover{border-color:var(--g2)}table.hcm input:focus{outline:none;border-color:var(--qg);background:#fff}
 table.hcm input::placeholder{color:var(--g4);font-weight:500}
+.sucf{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.sucf button{border:1px solid var(--g2);background:#fff;border-radius:99px;padding:7px 14px;font-weight:700;font-size:13px}
+.sucf button i{font-style:normal;color:var(--g4);margin-left:3px}.sucf button.on{background:var(--ink);color:#fff;border-color:var(--ink)}.sucf button.on i{color:#bdbdbd}
+table.sucT tr.sg td{background:var(--qg-lt);font-weight:700}table.sucT tr.sg:hover td{background:var(--qg-md)}
+table.sucT tr.st td{font-size:13px;padding-top:9px;padding-bottom:9px}table.sucT tr.st td.nm{padding-left:38px!important;font-weight:600}
+table.sucT .car{display:inline-block;width:18px;color:var(--qg)}
+table.sucT th{white-space:normal;vertical-align:bottom;padding:12px 10px!important;line-height:1.3}table.sucT td{padding:12px 10px!important}table.sucT td.nm{min-width:170px}
 .fl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
 .fi{width:100%;border:1px solid var(--g2);border-radius:10px;padding:10px 12px;font:inherit}
 .ck{display:flex;gap:8px;align-items:center;font-size:14px;margin-top:12px}
@@ -426,8 +433,8 @@ function stripC(c){ // solo lo que la página individual necesita
 function buildExport(c){
   var css=document.querySelector('style').textContent;
   var lite='var P='+JSON.stringify(Calc.P)+';var Calc={P:P,FESTIVOS:'+JSON.stringify(Calc.FESTIVOS)+',precioA:'+Calc.precioA.toString()+'};';
-  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules].map(function(f){return f.toString()}).join('\n');
-  var data='var MESES='+JSON.stringify(MESES)+';var RES='+JSON.stringify({monthKey:RES.monthKey,corte:RES.corte,contratistas:[stripC(c)]}).replace(/</g,'\\u003c')+';var IDX=0,RT="A";';
+  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules,sucName,setSucC,togSuc,sucBlock].map(function(f){return f.toString()}).join('\n');
+  var data='var MESES='+JSON.stringify(MESES)+';var RES='+JSON.stringify({monthKey:RES.monthKey,corte:RES.corte,contratistas:[stripC(c)]}).replace(/</g,'\\u003c')+';var IDX=0,RT="A",SUC="ALL",SUCOPEN={};';
   var js=lite+'\n'+data+'\n'+fns+'\nfunction $(id){return document.getElementById(id)}\nfunction sidebar(){}\n'+
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});renderC();';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
@@ -510,7 +517,8 @@ document.addEventListener('keydown',function(e){
 function openMo(html){$('mc').innerHTML=html;$('mo').classList.add('open');$('mo').scrollTop=0}
 function closeMo(){$('mo').classList.remove('open')}
 function cur(){return RES.contratistas[IDX]}
-function pick(i){IDX=i;FILTER='all';VIEW='c';render()}
+var SUC='ALL',SUCOPEN={};
+function pick(i){IDX=i;FILTER='all';SUC='ALL';SUCOPEN={};VIEW='c';render()}
 function setF(f){FILTER=f;render()}
 function counts(c){var g={r:c.vacantes||0,a:0,g:0};(c.tecs||[]).forEach(function(t){if(t.grupo)g[t.grupo]++});return g}
 
@@ -681,7 +689,8 @@ function renderC(){
      '<div class="w"><div class="t">Folios al día<span>'+pP.toFixed(1)+' por cuadrilla · meta 3.5</span></div><div class="a '+(c.adjProd>0?'up':'z')+'">'+adj(c.adjProd)+'</div>'+bar(pP,5,3.5,pP>=3.5)+'</div>'+
      '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
   // 3. acciones
-  var G={r:[],a:[],g:[]}; c.tecs.forEach(function(t,i){t._i=i;G[t.grupo].push(t)});
+  var G={r:[],a:[],g:[]}; c.tecs.forEach(function(t,i){t._i=i;if(SUC==='ALL'||t.dist===SUC)G[t.grupo].push(t)});
+  var vacF=SUC==='ALL'?vac:0;
   var st=[
     {ok:!vac,v:c.activos+' de '+c.hc,t:'Cuadrillas trabajando',s:vac?(vac+' lugar'+(vac>1?'es':'')+' de tu HC autorizado sin cubrir.'):'Tu HC autorizado está completo.'},
     {ok:c.adjAsist>=0,v:aP.toFixed(1)+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla. Hoy cuenta como '+c.proy.asist+'.'},
@@ -689,14 +698,16 @@ function renderC(){
   h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">'+(c.cerrado?'mes completo':'estimado al cierre del mes')+'</span></div><div class="acts3">';
   st.forEach(function(a){h+='<div class="ac'+(a.ok?' ok':' warn')+'"><div class="g">'+(a.ok?'✓ ':'')+a.v+'</div><b>'+a.t+'</b><span>'+a.s+'</span></div>'});
   h+='</div></div>';
-  // 4. técnicos
+  // 4. por sucursal (tabla tipo dinámica)
+  h+=sucBlock(c);
+  // 5. técnicos
   G.r.sort(function(a,b){return a.d-b.d});G.a.sort(function(a,b){return a.dProj-b.dProj});G.g.sort(function(a,b){return b.prodT-a.prodT});
   function row(t,msg){return '<button class="pr" onclick="openTec('+t._i+')"><div><div class="nm">'+esc(titleName(t.nombre))+'</div><div class="ms">'+msg+'</div></div><div class="dd">'+t.d+'<small>días</small></div></button>'}
-  h+='<div class="blk"><div class="blk-h"><span class="t">Su equipo</span><span class="s">Clic en un técnico para ver su detalle</span></div><div class="cols">';
-  h+='<div class="col r"><div class="col-h"><span class="d"></span><span class="t">Debajo de la meta</span><span class="n">'+(G.r.length+vac)+'</span></div><div class="col-s">No alcanzan 25 días este mes.</div>';
-  if(vac)h+='<div class="pr vac"><div><div class="nm">'+vac+' lugar'+(vac>1?'es':'')+' vacío'+(vac>1?'s':'')+'</div><div class="ms">Cuenta'+(vac>1?'n':'')+' como 0 días</div></div><div class="dd">0<small>días</small></div></div>';
+  h+='<div class="blk"><div class="blk-h"><span class="t">Su equipo'+(SUC==='ALL'?'':' · '+esc(sucName(c,SUC)))+'</span><span class="s">Clic en un técnico para ver su detalle</span></div><div class="cols">';
+  h+='<div class="col r"><div class="col-h"><span class="d"></span><span class="t">Debajo de la meta</span><span class="n">'+(G.r.length+vacF)+'</span></div><div class="col-s">No alcanzan 25 días este mes.</div>';
+  if(vacF)h+='<div class="pr vac"><div><div class="nm">'+vac+' lugar'+(vac>1?'es':'')+' vacío'+(vac>1?'s':'')+'</div><div class="ms">Cuenta'+(vac>1?'n':'')+' como 0 días</div></div><div class="dd">0<small>días</small></div></div>';
   G.r.forEach(function(t){h+=row(t,'Máximo llega a '+Math.round(t.maxPos)+' días')});
-  if(!G.r.length&&!vac)h+='<div class="emp">Nadie 👏</div>';
+  if(!G.r.length&&!vacF)h+='<div class="emp">Nadie 👏</div>';
   h+='</div><div class="col a"><div class="col-h"><span class="d"></span><span class="t">Cerca de la meta</span><span class="n">'+G.a.length+'</span></div><div class="col-s">Pueden llegar a la meta si mantienen el ritmo.</div>';
   G.a.forEach(function(t){h+=row(t,t.dProj<24.5?'Necesita trabajar todos los días que quedan':'Le faltan '+t.faltaFolSem+' folios por semana para 3.5 al día')});
   if(!G.a.length)h+='<div class="emp">Nadie</div>';
@@ -708,6 +719,29 @@ function renderC(){
   $('view').innerHTML=h;
 }
 
+function sucName(c,k){var t=c.tecs.filter(function(x){return x.dist===k})[0];if(!t)return k;
+  var n=String(t.sucursal).replace(/^.*?INT-[A-Z]+\s*/,'').toLowerCase().replace(/(^|\s)(\S)/g,function(m,a,b){return a+b.toUpperCase()});return n.replace(/\bGdl\b/g,'GDL')||k}
+function setSucC(k){SUC=k;if(k!=='ALL')SUCOPEN[k]=true;var y=window.scrollY;renderC();window.scrollTo(0,y)}
+function togSuc(k){SUCOPEN[k]=!SUCOPEN[k];var y=window.scrollY;renderC();window.scrollTo(0,y)}
+function sucBlock(c){
+  var D={},O=[];c.tecs.forEach(function(t,i){var k=t.dist||'—';if(!D[k]){D[k]={k:k,t:[],d:0,dp:0,f:0,fp:0,p:0,pp:0};O.push(k)}var g=D[k];g.t.push(i);g.d+=t.d;g.dp+=t.dProj;g.f+=t.fol+t.fest;g.fp+=t.folProj+t.fest;g.p+=t.pago||0;g.pp+=t.pagoProj||0});
+  if(O.length<2)return '';
+  O.sort(function(a,b){return D[b].pp-D[a].pp});
+  var fin=c.cerrado,n0=function(x){return Math.round(x).toLocaleString('en-US')};
+  var h='<div class="blk"><div class="blk-h"><span class="t">Por sucursal</span><span class="s">Clic en una sucursal para ver sus técnicos</span></div>';
+  h+='<div class="sucf"><button class="'+(SUC==='ALL'?'on':'')+'" onclick="setSucC(\'ALL\')">Todas <i>'+c.tecs.length+'</i></button>';
+  O.forEach(function(k){h+='<button class="'+(SUC===k?'on':'')+'" onclick="setSucC(\''+k+'\')">'+esc(sucName(c,k))+' <i>'+D[k].t.length+'</i></button>'});
+  h+='</div><div class="tw2"><table class="rs sucT"><thead><tr><th>Sucursal / técnico</th><th class="r">Cuadrillas</th><th class="r">Días trabajados</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios realizados</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
+  var T={n:0,d:0,dp:0,f:0,fp:0,p:0,pp:0};
+  O.forEach(function(k){if(SUC!=='ALL'&&SUC!==k)return;var g=D[k],n=g.t.length,open=!!SUCOPEN[k];
+    T.n+=n;T.d+=g.d;T.dp+=g.dp;T.f+=g.f;T.fp+=g.fp;T.p+=g.p;T.pp+=g.pp;
+    var dpc=g.dp/n,fpd=g.fp/n/26;
+    h+='<tr class="sg" onclick="togSuc(\''+k+'\')"><td class="nm"><span class="car">'+(open?'▾':'▸')+'</span>'+esc(sucName(c,k))+'</td><td class="r">'+n+'</td><td class="r">'+g.d+'</td><td class="r '+(dpc>=25?'ok':'bad')+'">'+dpc.toFixed(1)+'</td><td class="r">'+n0(g.f)+'</td><td class="r '+(fpd>=3.5?'ok':'bad')+'">'+fpd.toFixed(2)+'</td><td class="r"><b>'+fmt(g.p)+'</b></td>'+(fin?'':'<td class="r">'+fmt(g.pp)+'</td>')+'</tr>';
+    if(open)g.t.slice().sort(function(a,b){return c.tecs[b].prodT-c.tecs[a].prodT}).forEach(function(i){var t=c.tecs[i];
+      h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
+  h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(T.dp/Math.max(1,T.n)).toFixed(1)+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(T.fp/Math.max(1,T.n)/26).toFixed(2)+'</td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
+  return h+'<div class="how">Días y folios por cuadrilla de cada sucursal se miden sobre las cuadrillas que trabajan ahí; el precio por folio se calcula para todo el contratista.</div></div>';
+}
 function openTec(i){
   var c=cur(), t=c.tecs[i], mk=RES.monthKey, y=+mk.slice(0,4), m=+mk.slice(5,7)-1;
   var fest=Calc.FESTIVOS.filter(function(f){return f.slice(0,7)===mk});
