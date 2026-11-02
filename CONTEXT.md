@@ -45,6 +45,12 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Igu
 - En `file://` no puede leer hc.json → usa los valores embebidos en `calc.js` (`HC_MES`), mantenerlos sincronizados.
 - Nombres: `CONTRATISTAS` en calc.js con regex, porque cada archivo los escribe distinto (p.ej. "CARLOS MARTINEZ PALACI" vs "...PALACIO / ALEJANDRO DEL VALLE"). **Agustín Valencia Casillas + Juan Pablo Valencia se agrupan como "Grupo Onwars" (HC 4)** — pendiente confirmar con Giacomo.
 
+## Precio base por distrito
+- Vive en **`precios.json`** (`{"2026-10": {"MA|TEP": 480}}`, llave = id contratista | código de distrito). Herencia igual que HC: mes vacío usa el último mes anterior capturado.
+- Reemplaza el precio normal de tabla de ese distrito (A 480 / B 440 / LM 530); los ajustes de asistencia y productividad del contratista se suman encima (precio = base + (precioA − 480)). Soporte = precio − 40.
+- Pantalla **"$ Precio base por distrito"**: matriz contratista·distrito × mes (filas según el archivo cargado), cambios en localStorage (`pbLocal`), publicar a GitHub igual que HC.
+- Si un contratista tiene precio especial, su "precio por folio" es el promedio ponderado por folios y la tabla por sucursal marca "especial" (también en el HTML descargado).
+
 ## Pantallas
 1. **Carga**: arrastrar Excel. Lectura en Web Worker embebido (blob) con fallback al hilo principal; ~6 s para 52 MB.
 2. **Resumen del mes** (landing): costo estimado del mes, costo a la fecha, precio promedio ponderado, días/cuadrilla, folios/día, folios vs póliza, tabla por contratista con totales.

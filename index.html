@@ -327,6 +327,7 @@ table.hcm input::placeholder{color:var(--g4);font-weight:500}
 .sucf button i{font-style:normal;color:var(--g4);margin-left:3px}.sucf button.on{background:var(--ink);color:#fff;border-color:var(--ink)}.sucf button.on i{color:#bdbdbd}
 table.sucT tr.sg td{background:var(--qg-lt);font-weight:700}table.sucT tr.sg:hover td{background:var(--qg-md)}
 table.sucT tr.st td{font-size:13px;padding-top:9px;padding-bottom:9px}table.sucT tr.st td.nm{padding-left:38px!important;font-weight:600}
+table.sucT .esp{display:block;font-size:10px;font-weight:800;color:var(--qg);text-transform:uppercase;letter-spacing:.5px}
 table.sucT .car{display:inline-block;width:18px;color:var(--qg)}
 table.sucT th{white-space:normal;vertical-align:bottom;padding:12px 10px!important;line-height:1.3}table.sucT td{padding:12px 10px!important}table.sucT td.nm{min-width:170px}
 .fl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
@@ -524,7 +525,7 @@ function counts(c){var g={r:c.vacantes||0,a:0,g:0};(c.tecs||[]).forEach(function
 
 
 // ===== Vistas: Resumen y Autorizados (HC) =====
-var VIEW='res', HC_SRC='código', HC_DIRTY=false;
+var VIEW='res', HC_SRC='código', HC_DIRTY=false, PB_DIRTY=false;
 var REPO={owner:'gprimucci-qiora',repo:'contratistas',path:'hc.json',branch:'main'};
 var HC_MESES=(function(){var a=[],y=2026,m=9;for(var i=0;i<16;i++){a.push(y+'-'+String(m).padStart(2,'0'));m++;if(m>12){m=1;y++}}return a})();
 var MES_C=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -532,21 +533,27 @@ function mesCorto(k){return MES_C[+k.slice(5,7)-1]+'-'+k.slice(2,4)}
 
 var HC_READY=(function(){
   function applyLocal(){try{var l=localStorage.getItem('hcLocal');if(l){Calc.setHC(JSON.parse(l));HC_DIRTY=true;}}catch(e){}}
-  if(location.protocol==='file:'){applyLocal();return Promise.resolve();}
-  return fetch('hc.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()})
-    .then(function(j){Calc.setHC(j);HC_SRC='hc.json'}).catch(function(){}).then(applyLocal);
+  function applyLocalPB(){try{var l=localStorage.getItem('pbLocal');if(l){Calc.setPrecios(JSON.parse(l));PB_DIRTY=true;}}catch(e){}}
+  if(location.protocol==='file:'){applyLocal();applyLocalPB();return Promise.resolve();}
+  return Promise.all([
+    fetch('hc.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()})
+      .then(function(j){Calc.setHC(j);HC_SRC='hc.json'}).catch(function(){}).then(applyLocal),
+    fetch('precios.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()})
+      .then(function(j){Calc.setPrecios(j)}).catch(function(){}).then(applyLocalPB)]);
 })();
 
 function render(){
   if(VIEW==='res')return renderRes();
   if(VIEW==='hc')return renderHC();
+  if(VIEW==='pb')return renderPB();
   renderC();
 }
 function go(v){VIEW=v;render()}
 
 function navTop(){
   return '<button class="nv'+(VIEW==='res'?' on':'')+'" onclick="go(\'res\')">▦ Resumen del mes</button>'+
-         '<button class="nv'+(VIEW==='hc'?' on':'')+'" onclick="go(\'hc\')">✎ HC autorizado'+(HC_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>';
+         '<button class="nv'+(VIEW==='hc'?' on':'')+'" onclick="go(\'hc\')">✎ HC autorizado'+(HC_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>'+
+         '<button class="nv'+(VIEW==='pb'?' on':'')+'" onclick="go(\'pb\')">$ Precio base por distrito'+(PB_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>';
 }
 
 var ALERTA={sinAct:3, prodAlta:6}; // días hábiles seguidos sin folios · folios por día trabajado
@@ -629,34 +636,77 @@ function renderHC(){
   h+='</tbody></table></div></div>';
   $('view').innerHTML=h;
 }
+function pbRows(){ // contratista × distrito según el archivo cargado
+  var R={};
+  Object.keys(DATA.tec).forEach(function(u){var t=DATA.tec[u],c=String(t.contratista||'').trim().toUpperCase();if(!c||c==='INTERNO')return;
+    var ct=null;Calc.CONTRATISTAS.forEach(function(x){if(!ct&&x.re.test(c))ct=x});if(!ct)return;
+    var m=String(t.sucursal).match(/INT-([A-Z]+)/);if(!m)return;var d=m[1],k=ct.id+'|'+d;
+    if(!R[k])R[k]={k:k,ct:ct,d:d,name:String(t.sucursal).replace(/^.*?INT-[A-Z]+\s*/,'').toLowerCase().replace(/(^|\s)(\S)/g,function(a,b,c){return b+c.toUpperCase()}).replace(/\bGdl\b/g,'GDL'),n:0};R[k].n++});
+  var order=Calc.CONTRATISTAS.map(function(x){return x.id});
+  return Object.keys(R).map(function(k){return R[k]}).sort(function(a,b){return order.indexOf(a.ct.id)-order.indexOf(b.ct.id)||a.name.localeCompare(b.name)});
+}
+function pbDefault(d){var tp=Calc.tipoDist(d);return Calc.P.base.A+(tp==='LM'?50:tp==='B'?-40:0)}
+function renderPB(){
+  sidebar();
+  var M=Calc.getPrecios(), cur=RES?RES.monthKey:'', rows=pbRows(), last='';
+  var h='<div class="pg wide"><div class="pg-h"><div class="ey">Configuración</div><h1>Precio base por distrito</h1>'+
+    '<div class="meta"><span>Precio normal por folio de cada contratista en cada distrito. Vacío = precio de tabla (Tipo A $480 · Tipo B $440 · López Mateos $530). Un mes vacío usa el último mes anterior capturado. Los ajustes por días y folios al día se aplican encima.</span></div></div>';
+  h+='<div class="hcbar">'+(PB_DIRTY?'<span class="dirty big">Tienes cambios sin publicar: los montos ya se recalcularon en esta pantalla, pero nadie más los ve.</span>':'<span class="okk">Al día con precios.json</span>')+
+     '<span class="sp"></span><button class="b2" onclick="dlPB()">⬇ Descargar precios.json</button>'+(PB_DIRTY?'<button class="b2" onclick="discardPB()">Descartar cambios</button>':'')+'<button class="b1" onclick="publishHC(\'pb\')"'+(PB_DIRTY?'':' disabled')+'>Publicar en GitHub</button></div>';
+  h+='<div class="tw2"><table class="hcm"><thead><tr><th>Contratista · distrito</th>';
+  HC_MESES.forEach(function(k){h+='<th class="'+(k===cur?'cur':'')+'">'+mesCorto(k)+'</th>'});h+='</tr></thead><tbody>';
+  rows.forEach(function(r){
+    if(r.ct.id!==last){h+='<tr><td class="nm" style="color:var(--ink);font-weight:800;background:#fafafa" colspan="'+(HC_MESES.length+1)+'">'+esc(r.ct.nombre)+'</td></tr>';last=r.ct.id}
+    h+='<tr><td class="nm" style="padding-left:30px">'+esc(r.name)+' <span style="color:var(--g4);font-weight:500">· '+r.d+' · tabla $'+pbDefault(r.d)+'</span></td>';
+    HC_MESES.forEach(function(k){var v=M[k]&&M[k][r.k]!=null?M[k][r.k]:'', inh=v===''?Calc.baseFor(r.ct.id,r.d,k):null;
+      h+='<td class="'+(k===cur?'cur':'')+'"><input inputmode="numeric" value="'+v+'" placeholder="'+(inh!=null?inh:pbDefault(r.d))+'" data-k="'+r.k+'" data-m="'+k+'" onchange="editPB(this)"'+(v!==''?' style="color:var(--qg)"':'')+'></td>'});
+    h+='</tr>'});
+  h+='</tbody></table></div><div class="foot">Solo aparecen los distritos donde el contratista tiene técnicos en el archivo cargado. En verde = precio especial capturado ese mes.</div></div>';
+  $('view').innerHTML=h;
+}
+function editPB(el){
+  var M=Calc.getPrecios(), k=el.dataset.m, id=el.dataset.k, v=el.value.trim();
+  if(v!==''&&!/^\d+$/.test(v)){el.value='';return}
+  M[k]=M[k]||{}; if(v==='')delete M[k][id]; else M[k][id]=+v;
+  if(!Object.keys(M[k]).length)delete M[k];
+  Calc.setPrecios(M); PB_DIRTY=true; try{localStorage.setItem('pbLocal',JSON.stringify(M))}catch(e){}
+  RES=Calc.compute(DATA.rows,DATA.tec,$('mes').value); setTimeout(renderPB,0);
+}
+function pbJSON(){var M=Calc.getPrecios(),o={};Object.keys(M).sort().forEach(function(k){o[k]=M[k]});return JSON.stringify(o,null,2)+'\n'}
+function dlPB(){saveBlob(new Blob([pbJSON()],{type:'application/json'}),'precios.json')}
+function discardPB(){try{localStorage.removeItem('pbLocal')}catch(e){} location.reload()}
 function editHC(el){
   var M=Calc.getHC(), k=el.dataset.m, id=el.dataset.id, v=el.value.trim();
   if(v!==''&&!/^\d+$/.test(v)){el.value='';return}
   M[k]=M[k]||{}; if(v==='')delete M[k][id]; else M[k][id]=+v;
   if(!Object.keys(M[k]).length)delete M[k];
   Calc.setHC(M); HC_DIRTY=true; try{localStorage.setItem('hcLocal',JSON.stringify(M))}catch(e){}
-  RES=Calc.compute(DATA.rows,DATA.tec,$('mes').value); renderHC();
+  RES=Calc.compute(DATA.rows,DATA.tec,$('mes').value); setTimeout(renderHC,0);
 }
 function hcJSON(){var M=Calc.getHC(),o={};Object.keys(M).sort().forEach(function(k){o[k]=M[k]});return JSON.stringify(o,null,2)+'\n'}
 function dlHC(){saveBlob(new Blob([hcJSON()],{type:'application/json'}),'hc.json')}
 function discardHC(){try{localStorage.removeItem('hcLocal')}catch(e){} location.reload()}
-function publishHC(){
+var PUB={hc:{path:'hc.json',titulo:'HC',msg:'Actualiza HC autorizado',json:function(){return hcJSON()},local:'hcLocal',done:function(){HC_DIRTY=false;HC_SRC='hc.json'}},
+         pb:{path:'precios.json',titulo:'precios base',msg:'Actualiza precios base por distrito',json:function(){return pbJSON()},local:'pbLocal',done:function(){PB_DIRTY=false}}};
+function publishHC(kind){
+  kind=kind||'hc'; var K=PUB[kind];
   var saved=''; try{saved=localStorage.getItem('ghTok')||sessionStorage.getItem('ghTok')||''}catch(e){}
-  openMo('<div class="mh"><div><div class="t">Publicar HC en GitHub</div><div class="st">Guarda hc.json en '+REPO.owner+'/'+REPO.repo+'. Todos verán los nuevos montos en 1–2 minutos.</div></div><button class="x" onclick="closeMo()">✕</button></div>'+
+  openMo('<div class="mh"><div><div class="t">Publicar '+K.titulo+' en GitHub</div><div class="st">Guarda '+K.path+' en '+REPO.owner+'/'+REPO.repo+'. Todos verán los nuevos montos en 1–2 minutos.</div></div><button class="x" onclick="closeMo()">✕</button></div>'+
     '<div class="mb"><label class="fl">Token de GitHub (ghp_…)</label><input id="tok" type="password" class="fi" value="'+esc(saved)+'" placeholder="ghp_...">'+
     '<label class="ck"><input type="checkbox" id="rem"'+(saved&&localStorage.getItem('ghTok')?' checked':'')+'> Recordar en este navegador</label>'+
-    '<div class="how">El token solo se guarda en este navegador y solo se usa para enviar hc.json a GitHub.</div>'+
-    '<div id="pubmsg" class="how"></div><button class="b1 wide" onclick="doPublish()">Publicar</button></div>');
+    '<div class="how">El token solo se guarda en este navegador y solo se usa para enviar archivos de configuración a GitHub.</div>'+
+    '<div id="pubmsg" class="how"></div><button class="b1 wide" onclick="doPublish(\''+kind+'\')">Publicar</button></div>');
 }
-function doPublish(){
+function doPublish(kind){
+  var K=PUB[kind||'hc'];
   var tok=$('tok').value.trim(), msg=$('pubmsg'); if(!tok){msg.textContent='Falta el token.';return}
   try{ if($('rem').checked){localStorage.setItem('ghTok',tok)}else{localStorage.removeItem('ghTok');sessionStorage.setItem('ghTok',tok)} }catch(e){}
-  var url='https://api.github.com/repos/'+REPO.owner+'/'+REPO.repo+'/contents/'+REPO.path, H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'};
+  var url='https://api.github.com/repos/'+REPO.owner+'/'+REPO.repo+'/contents/'+K.path, H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json'};
   msg.textContent='Publicando…';
   fetch(url+'?ref='+REPO.branch,{headers:H}).then(function(r){return r.status===404?{}:r.json()}).then(function(j){
-    return fetch(url,{method:'PUT',headers:H,body:JSON.stringify({message:'Actualiza HC autorizado',branch:REPO.branch,sha:j.sha,content:btoa(unescape(encodeURIComponent(hcJSON())))})});
+    return fetch(url,{method:'PUT',headers:H,body:JSON.stringify({message:K.msg,branch:REPO.branch,sha:j.sha,content:btoa(unescape(encodeURIComponent(K.json())))})});
   }).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.message||r.status);return j})}).then(function(){
-    try{localStorage.removeItem('hcLocal')}catch(e){} HC_DIRTY=false; HC_SRC='hc.json'; closeMo(); render();
+    try{localStorage.removeItem(K.local)}catch(e){} K.done(); closeMo(); render();
   }).catch(function(e){msg.innerHTML='<span style="color:var(--red)">No se pudo publicar: '+esc(e.message)+'</span>'});
 }
 
@@ -684,7 +734,7 @@ function renderC(){
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(c.cerrado?'Cerraste '+mesN+' con':'Así vas al '+corteD+' de '+mesN)+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
      (c.cerrado?'':'<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>')+(!c.cerrado&&c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
      '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
-  h+='<div class="c-price"><div class="top"><span class="l">Precio por folio</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">precio normal '+fmt(normal)+'</div><div class="why">'+
+  h+='<div class="c-price"><div class="top"><span class="l">Precio por folio'+(c.variosPrecios?' <span style="font-weight:500;color:var(--g5)">(promedio)</span>':'')+'</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">'+(c.variosPrecios?'varía por sucursal · ver tabla por sucursal':'precio normal '+fmt(normal))+(c.especial?' · incluye precio especial':'')+'</div><div class="why">'+
      '<div class="w"><div class="t">Días trabajados<span>'+aP.toFixed(1)+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
      '<div class="w"><div class="t">Folios al día<span>'+pP.toFixed(1)+' por cuadrilla · meta 3.5</span></div><div class="a '+(c.adjProd>0?'up':'z')+'">'+adj(c.adjProd)+'</div>'+bar(pP,5,3.5,pP>=3.5)+'</div>'+
      '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
@@ -731,15 +781,15 @@ function sucBlock(c){
   var h='<div class="blk"><div class="blk-h"><span class="t">Por sucursal</span><span class="s">Clic en una sucursal para ver sus técnicos</span></div>';
   h+='<div class="sucf"><button class="'+(SUC==='ALL'?'on':'')+'" onclick="setSucC(\'ALL\')">Todas <i>'+c.tecs.length+'</i></button>';
   O.forEach(function(k){h+='<button class="'+(SUC===k?'on':'')+'" onclick="setSucC(\''+k+'\')">'+esc(sucName(c,k))+' <i>'+D[k].t.length+'</i></button>'});
-  h+='</div><div class="tw2"><table class="rs sucT"><thead><tr><th>Sucursal / técnico</th><th class="r">Cuadrillas</th><th class="r">Días trabajados</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios realizados</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
+  h+='</div><div class="tw2"><table class="rs sucT"><thead><tr><th>Sucursal / técnico</th><th class="r">Cuadrillas</th><th class="r">Días trabajados</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios realizados</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">Precio por folio</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
   var T={n:0,d:0,dp:0,f:0,fp:0,p:0,pp:0};
   O.forEach(function(k){if(SUC!=='ALL'&&SUC!==k)return;var g=D[k],n=g.t.length,open=!!SUCOPEN[k];
     T.n+=n;T.d+=g.d;T.dp+=g.dp;T.f+=g.f;T.fp+=g.fp;T.p+=g.p;T.pp+=g.pp;
     var dpc=g.dp/n,fpd=g.fp/n/26;
-    h+='<tr class="sg" onclick="togSuc(\''+k+'\')"><td class="nm"><span class="car">'+(open?'▾':'▸')+'</span>'+esc(sucName(c,k))+'</td><td class="r">'+n+'</td><td class="r">'+g.d+'</td><td class="r '+(dpc>=25?'ok':'bad')+'">'+dpc.toFixed(1)+'</td><td class="r">'+n0(g.f)+'</td><td class="r '+(fpd>=3.5?'ok':'bad')+'">'+fpd.toFixed(2)+'</td><td class="r"><b>'+fmt(g.p)+'</b></td>'+(fin?'':'<td class="r">'+fmt(g.pp)+'</td>')+'</tr>';
+    h+='<tr class="sg" onclick="togSuc(\''+k+'\')"><td class="nm"><span class="car">'+(open?'▾':'▸')+'</span>'+esc(sucName(c,k))+'</td><td class="r">'+n+'</td><td class="r">'+g.d+'</td><td class="r '+(dpc>=25?'ok':'bad')+'">'+dpc.toFixed(1)+'</td><td class="r">'+n0(g.f)+'</td><td class="r '+(fpd>=3.5?'ok':'bad')+'">'+fpd.toFixed(2)+'</td><td class="r">'+fmt(c.tecs[g.t[0]].precio)+(c.tecs[g.t[0]].especial?'<span class="esp">especial</span>':'')+'</td><td class="r"><b>'+fmt(g.p)+'</b></td>'+(fin?'':'<td class="r">'+fmt(g.pp)+'</td>')+'</tr>';
     if(open)g.t.slice().sort(function(a,b){return c.tecs[b].prodT-c.tecs[a].prodT}).forEach(function(i){var t=c.tecs[i];
-      h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
-  h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(T.dp/Math.max(1,T.n)).toFixed(1)+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(T.fp/Math.max(1,T.n)/26).toFixed(2)+'</td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
+      h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
+  h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(T.dp/Math.max(1,T.n)).toFixed(1)+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(T.fp/Math.max(1,T.n)/26).toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
   return h+'<div class="how">Días y folios por cuadrilla de cada sucursal se miden sobre las cuadrillas que trabajan ahí; el precio por folio se calcula para todo el contratista.</div></div>';
 }
 function openTec(i){

@@ -17,6 +17,14 @@
     '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 },
     '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 }
   };
+  // Precio base especial por contratista y distrito: {'2026-10': {'MA|TEP': 480}}. Mes sin valor hereda el último anterior.
+  var PRECIOS = {};
+  function baseFor(id, dist, monthKey) {
+    var k = id + '|' + dist, ks = Object.keys(PRECIOS).filter(function (m) { return m <= monthKey; }).sort().reverse();
+    for (var i = 0; i < ks.length; i++) { var v = PRECIOS[ks[i]][k]; if (v != null && v !== '') return +v; }
+    return null;
+  }
+  function tipoDist(dist) { return dist === 'GLM' ? 'LM' : /^(GBA|GES|GPR)$/.test(dist) ? 'A' : 'B'; }
   function matchC(name) { var n = norm(name); for (var i = 0; i < CONTRATISTAS.length; i++) if (CONTRATISTAS[i].re.test(n)) return CONTRATISTAS[i]; return null; }
   // Busca el HC del contratista en el mes; si el mes no lo trae, usa el último mes anterior que sí.
   function hcFor(id, monthKey) {
@@ -97,6 +105,10 @@
       C.tecs.forEach(function (t) { sumD += t.d; sumDP += t.dProj; sumF += t.fol; sumFP += t.folProj; });
       var r = { id: C.id, nombre: C.nombre, hc: hc, cerrado: restH === 0, activos: C.tecs.length, corte: corte, totH: totH, pasH: pasH, restH: restH, tecs: C.tecs };
       if (!hc) { r.error = 'Sin HC autorizado'; return r; }
+      C.tecs.forEach(function (t) {
+        var o = C.id ? baseFor(C.id, t.dist, monthKey) : null;
+        t.base = o != null ? o : P.base.A + ajusteTipo(t.tipo); t.especial = o != null;
+      });
       function evalPrice(sDP, sFP) {
         var a = Math.floor(sDP / hc), p = Math.floor(sFP / hc / P.diasMes * 10) / 10;
         return { asist: a, prod: p, precio: precioA(a, p), asistReal: sDP / hc, prodReal: sFP / hc / P.diasMes };
@@ -105,7 +117,7 @@
         var tot = 0;
         C.tecs.forEach(function (t) {
           var before = tot;
-          var pr = precioA_ + ajusteTipo(t.tipo), s = t.sop, rc = t.reco, f = t.fol, fe = t.fest;
+          var pr = t.base + (precioA_ - P.base.A), s = t.sop, rc = t.reco, f = t.fol, fe = t.fest;
           if (proj) { s *= t.k; rc *= t.k; f = t.folProj; }
           var otras = f - s - rc;
           tot += otras * pr + s * (pr - P.soporte) + rc * P.reco + fe * pr + (fe >= P.festMin ? P.festBono : 0);
@@ -123,13 +135,18 @@
       r.adjProd = proy.precio - (P.base.A + r.adjAsist);
       r.cobrado = pay(proy.precio, false, 'pago');
       r.cierre = pay(proy.precio, true, 'pagoProj');
-      r.precioTipo = proy.precio + ajusteTipo(r.tipoPrincipal);
+      // Precio por folio del contratista = promedio ponderado por folios de sus distritos (igual al de tabla si no hay precios especiales)
+      var wf = 0, wp = 0;
+      C.tecs.forEach(function (t) { var f = Math.max(t.folProj, 0.0001); wf += f; wp += f * (t.base + proy.precio - P.base.A); });
+      r.especial = C.tecs.some(function (t) { return t.especial; });
+      r.precioTipo = r.especial && wf ? Math.round(wp / wf) : proy.precio + ajusteTipo(r.tipoPrincipal);
+      r.variosPrecios = r.especial && C.tecs.some(function (t) { return t.base !== C.tecs[0].base; });
       // Oportunidad 1: subir un escalón de asistencia
       if (proy.asist < P.metaDias) {
         var nextA = proy.asist <= P.metaDias - 2 ? P.metaDias - 1 : P.metaDias;
         var need = Math.ceil(nextA * hc - sumDP);
         var precioNext = precioA(nextA, proy.prod);
-        r.opAsist = { faltan: need, porCuadrilla: Math.ceil(need / hc), precioNuevo: precioNext + ajusteTipo(r.tipoPrincipal),
+        r.opAsist = { faltan: need, porCuadrilla: Math.ceil(need / hc), precioNuevo: r.precioTipo + (precioNext - proy.precio),
                       gana: pay(precioNext, true) - r.cierre };
       }
       // Oportunidad 2: vacantes
@@ -139,7 +156,7 @@
         var addD = vac * avgRate * restH, addF = addD * avgFpd;
         var p2 = evalPrice(sumDP + addD, sumFP + addF);
         var avgPay = r.cierre / Math.max(1, sumFP);
-        r.opVac = { vacantes: vac, gana: pay(p2.precio, true) - r.cierre + addF * (p2.precio + ajusteTipo(r.tipoPrincipal)) };
+        r.opVac = { vacantes: vac, gana: pay(p2.precio, true) - r.cierre + addF * (r.precioTipo + (p2.precio - proy.precio)) };
       }
       // Grupos de técnicos
       C.tecs.forEach(function (t) {
@@ -160,6 +177,7 @@
     return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0] || 'A'; }
 
   root.Calc = { compute: compute, iso: iso, CONTRATISTAS: CONTRATISTAS, hcFor: hcFor,
-    getHC: function () { return JSON.parse(JSON.stringify(HC_MES)); }, setHC: function (o) { HC_MES = o || {}; }, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
+    getHC: function () { return JSON.parse(JSON.stringify(HC_MES)); }, setHC: function (o) { HC_MES = o || {}; },
+    getPrecios: function () { return JSON.parse(JSON.stringify(PRECIOS)); }, setPrecios: function (o) { PRECIOS = o || {}; }, baseFor: baseFor, tipoDist: tipoDist, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
   if (typeof module !== 'undefined') module.exports = root.Calc;
 })(typeof self !== 'undefined' ? self : this);
