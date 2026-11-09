@@ -117,7 +117,7 @@
       if (!hc) { r.error = 'Sin HC autorizado'; return r; }
       C.tecs.forEach(function (t) {
         var o = C.id ? baseFor(C.id, t.dist, monthKey) : null;
-        t.base = o != null ? o : P.base.A + ajusteTipo(t.tipo); t.especial = o != null;
+        var def = P.base.A + ajusteTipo(t.tipo); t.base = o != null ? o : def; t.especial = o != null && o !== def; // igual a tabla = no es especial
       });
       function evalPrice(sDP, sFP) {
         var a = Math.floor(sDP / hc), p = Math.floor(sFP / hc / P.diasMes * 10) / 10;
@@ -132,6 +132,8 @@
           var otras = f - s - rc;
           tot += otras * pr + s * (pr - P.soporte) + rc * P.reco + fe * pr + (fe >= P.festMin ? P.festBono : 0);
           if (store) { t[store] = tot - before; t.precio = pr; }
+          if (store === 'pago') t.comp = { otras: otras, otrasM: otras * pr, sop: s, sopM: s * (pr - P.soporte), reco: rc, recoM: rc * P.reco,
+            fest: fe, festM: fe * pr + (fe >= P.festMin ? P.festBono : 0) };
         });
         return tot;
       }
@@ -178,6 +180,7 @@
         t.faltaFolSem = Math.max(0, Math.ceil((P.metaProd * P.diasMes - t.folProj) / Math.max(1, restH / 6)));
       });
       r.vacantes = Math.max(0, vac);
+      r.desglose = desglose(C.tecs);
       return r;
     });
     out = agrupar(out);
@@ -209,11 +212,18 @@
       r.proy = { asist: Math.floor(r.dias / r.hc), prod: Math.floor(r.folios / r.hc / P.diasMes * 10) / 10 };
       r.precioTipo = wf ? Math.round(wp / wf) : ok[0].precioTipo;
       r.variosPrecios = true; r.especial = ok.some(function (p) { return p.especial; });
+      r.desglose = desglose(r.tecs);
       r.tipoPrincipal = mainTipo(r.tecs); r.metaDias = r.hc * P.metaDias; r.poliza = r.hc * P.metaProd * P.diasMes;
       r.faltaHC = P_.filter(function (p) { return p.error; }).map(function (p) { return byId[p.id].corto; });
       rest.push(r);
     });
     return rest;
+  }
+  // Cómo se arma el monto realizado: folios a precio, soporte a precio − $40, recolección a $150 y día festivo.
+  function desglose(tecs) {
+    var d = { otras: 0, otrasM: 0, sop: 0, sopM: 0, reco: 0, recoM: 0, fest: 0, festM: 0 };
+    tecs.forEach(function (t) { if (t.comp) Object.keys(d).forEach(function (k) { d[k] += t.comp[k]; }); });
+    return d;
   }
   function mainTipo(tecs) { var c = {}; tecs.forEach(function (t) { c[t.tipo] = (c[t.tipo] || 0) + 1; });
     return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0] || 'A'; }

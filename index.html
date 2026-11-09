@@ -437,7 +437,7 @@ function stripC(c){ // solo lo que la página individual necesita
 function buildExport(c){
   var css=document.querySelector('style').textContent;
   var lite='var P='+JSON.stringify(Calc.P)+';var Calc={P:P,FESTIVOS:'+JSON.stringify(Calc.FESTIVOS)+',precioA:'+Calc.precioA.toString()+'};';
-  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules,sucName,setSucC,togSuc,sucBlock,parteBlock].map(function(f){return f.toString()}).join('\n');
+  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules,sucName,setSucC,togSuc,sucBlock,parteBlock,montoDesglose].map(function(f){return f.toString()}).join('\n');
   var data='var MESES='+JSON.stringify(MESES)+';var RES='+JSON.stringify({monthKey:RES.monthKey,corte:RES.corte,contratistas:[stripC(c)]}).replace(/</g,'\\u003c')+';var IDX=0,RT="A",SUC="ALL",SUCOPEN={};';
   var js=lite+'\n'+data+'\n'+fns+'\nfunction $(id){return document.getElementById(id)}\nfunction sidebar(){}\n'+
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});renderC();';
@@ -573,7 +573,7 @@ function renderRes(){
     '<div class="meta"><span><b>'+L.length+'</b> contratistas</span><span>HC autorizado: <b>'+T.hc+'</b></span><span>Trabajando: <b class="'+(T.act<T.hc?'bad':'')+'">'+T.act+'</b></span><span>Día hábil <b>'+(c0.pasH||0)+' de '+(c0.totH||0)+'</b></span></div></div>';
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(fin?'Costo del mes':'Costo estimado del mes, al ritmo actual')+'</div><div class="v">'+fmt(fin?T.cob:T.cie)+'<sup>*</sup></div>'+
      (fin?'<div class="s">Mes completo: <b>'+n0(T.fh)+' folios</b></div>':'<div class="s">Costo a la fecha: <b>'+fmt(T.cob)+'</b> al '+corteD+' de '+mesN+'</div>')+'</div><div class="n">* Antes de descuentos. '+(fin?'No oficial.':'Estimado, no oficial.')+'</div></div>'+
-     '<div class="c-price"><div class="top"><span class="l">Precio promedio por folio</span><span class="v">'+fmt(precio)+'</span></div><div class="nrm" style="text-align:right">ponderado por folios'+(fin?'':' estimados')+'</div><div class="why">'+
+     '<div class="c-price"><div class="top"><span class="l">Precio promedio por folio</span><span class="v">'+fmt(precio)+'</span></div><div class="nrm" style="text-align:right">precio de tabla ponderado por folios'+(fin?'':' estimados')+'<br>promedio pagado: <b>'+fmt(T.fh?T.cob/T.fh:0)+'</b> por folio (soporte −$40, recolección $150)</div><div class="why">'+
      '<div class="w"><div class="t">Días por cuadrilla<span>'+(fin?'del mes':'estimado al cierre')+' · meta 25</span></div><div class="a '+(asis>=25?'up':'dn')+'">'+Math.floor(asis)+'</div></div>'+
      '<div class="w"><div class="t">Folios al día<span>'+(fin?'del mes':'estimado al cierre')+' · meta 3.5</span></div><div class="a '+(prod>=3.5?'up':'dn')+'">'+(Math.floor(prod*10)/10).toFixed(1)+'</div></div>'+
      '<div class="w"><div class="t">Folios realizados<span>al '+corteD+' de '+mesN+' · póliza '+n0(poliza)+'</span></div><div class="a">'+n0(T.fh)+'</div></div>'+
@@ -741,7 +741,7 @@ function renderC(){
   function bar(v,max,goal,ok){return '<div class="bar"><i style="width:'+Math.min(100,v/max*100)+'%;background:'+(ok?'var(--qg)':'var(--red)')+'"></i><u style="left:'+(goal/max*100)+'%"></u></div>'}
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(c.cerrado?'Cerraste '+mesN+' con':'Así vas al '+corteD+' de '+mesN)+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
      (c.cerrado?'':'<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>')+(!c.cerrado&&c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
-     '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
+     montoDesglose(c)+'<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
   if(c.grupo)h+='<div class="c-price"><div class="top"><span class="l">Precio por folio <span style="font-weight:500;color:var(--g5)">(promedio)</span></span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">cada distrito tiene su propio precio</div><div class="why">'+
      c.partes.map(function(p){return p.error?'<div class="w"><div class="t">'+esc(p.nombre)+'<span>sin HC autorizado</span></div><div class="a z">—</div></div>':
        '<div class="w"><div class="t">'+esc(p.nombre)+'<span>'+p.proy.asist+' días · '+p.proy.prod.toFixed(1)+' folios al día · '+adj(p.adjAsist)+' / '+adj(p.adjProd)+'</span></div><div class="a '+(p.adjAsist<0?'dn':p.adjProd>0?'up':'z')+'">'+fmt(p.precioTipo)+'</div></div>'}).join('')+
@@ -787,23 +787,47 @@ function sucName(c,k){var t=c.tecs.filter(function(x){return x.dist===k})[0];if(
 function setSucC(k){SUC=k;if(k!=='ALL')SUCOPEN[k]=true;var y=window.scrollY;renderC();window.scrollTo(0,y)}
 function togSuc(k){SUCOPEN[k]=!SUCOPEN[k];var y=window.scrollY;renderC();window.scrollTo(0,y)}
 function sucBlock(c){
-  var D={},O=[];c.tecs.forEach(function(t,i){var k=t.dist||'—';if(!D[k]){D[k]={k:k,t:[],d:0,dp:0,f:0,fp:0,p:0,pp:0};O.push(k)}var g=D[k];g.t.push(i);g.d+=t.d;g.dp+=t.dProj;g.f+=t.fol+t.fest;g.fp+=t.folProj+t.fest;g.p+=t.pago||0;g.pp+=t.pagoProj||0});
+  // Días/cuadrilla y folios al día se miden sobre el HC AUTORIZADO (igual que el precio y la hoja Resultados), truncados.
+  // Una sucursal tiene HC propio cuando es un distrito completo de un contratista agrupado (p.ej. Marco Anaya Tepic).
+  var D={},O=[];c.tecs.forEach(function(t,i){var k=t.dist||'—';if(!D[k]){D[k]={k:k,t:[],d:0,dp:0,f:0,fm:0,fmp:0,p:0,pp:0,partes:{}};O.push(k)}var g=D[k];g.t.push(i);g.d+=t.d;g.dp+=t.dProj;g.f+=t.fol+t.fest;g.fm+=t.fol;g.fmp+=t.folProj;g.p+=t.pago||0;g.pp+=t.pagoProj||0;if(t.parte)g.partes[t.parte]=1});
   if(O.length<2)return '';
+  function hcDe(k){if(!c.partes)return null;var ps=Object.keys(D[k].partes);if(ps.length!==1)return null;
+    var otra=c.tecs.some(function(t){return t.parte===ps[0]&&t.dist!==k});if(otra)return null;
+    var p=c.partes.filter(function(x){return x.id===ps[0]})[0];return p&&p.hc?p.hc:null}
+  function asis(dp,hc){return Math.floor(dp/hc)} function prod(fm,hc){return (Math.floor(fm/hc/26*10)/10).toFixed(1)}
   O.sort(function(a,b){return D[b].pp-D[a].pp});
-  var fin=c.cerrado,n0=function(x){return Math.round(x).toLocaleString('en-US')};
+  var fin=c.cerrado,n0=function(x){return Math.round(x).toLocaleString('en-US')},sinHC=false;
   var h='<div class="blk"><div class="blk-h"><span class="t">Por sucursal</span><span class="s">Clic en una sucursal para ver sus técnicos</span></div>';
   h+='<div class="sucf"><button class="'+(SUC==='ALL'?'on':'')+'" onclick="setSucC(\'ALL\')">Todas <i>'+c.tecs.length+'</i></button>';
   O.forEach(function(k){h+='<button class="'+(SUC===k?'on':'')+'" onclick="setSucC(\''+k+'\')">'+esc(sucName(c,k))+' <i>'+D[k].t.length+'</i></button>'});
-  h+='</div><div class="tw2"><table class="rs sucT"><thead><tr><th>Sucursal / técnico</th><th class="r">Cuadrillas</th><th class="r">Días trabajados</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios realizados</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">Precio por folio</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
-  var T={n:0,d:0,dp:0,f:0,fp:0,p:0,pp:0};
-  O.forEach(function(k){if(SUC!=='ALL'&&SUC!==k)return;var g=D[k],n=g.t.length,open=!!SUCOPEN[k];
-    T.n+=n;T.d+=g.d;T.dp+=g.dp;T.f+=g.f;T.fp+=g.fp;T.p+=g.p;T.pp+=g.pp;
-    var dpc=g.dp/n,fpd=g.fp/n/26;
-    h+='<tr class="sg" onclick="togSuc(\''+k+'\')"><td class="nm"><span class="car">'+(open?'▾':'▸')+'</span>'+esc(sucName(c,k))+'</td><td class="r">'+n+'</td><td class="r">'+g.d+'</td><td class="r '+(dpc>=25?'ok':'bad')+'">'+dpc.toFixed(1)+'</td><td class="r">'+n0(g.f)+'</td><td class="r '+(fpd>=3.5?'ok':'bad')+'">'+fpd.toFixed(2)+'</td><td class="r">'+fmt(c.tecs[g.t[0]].precio)+(c.tecs[g.t[0]].especial?'<span class="esp">especial</span>':'')+'</td><td class="r"><b>'+fmt(g.p)+'</b></td>'+(fin?'':'<td class="r">'+fmt(g.pp)+'</td>')+'</tr>';
+  h+='</div><div class="tw2"><table class="rs sucT"><thead><tr><th>Sucursal / técnico</th><th class="r">HC autorizado</th><th class="r">Cuadrillas trabajando</th><th class="r">Días trabajados</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios realizados</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">Precio por folio</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
+  var T={n:0,d:0,dp:0,f:0,fmp:0,p:0,pp:0,hc:0,hcOk:true};
+  O.forEach(function(k){if(SUC!=='ALL'&&SUC!==k)return;var g=D[k],n=g.t.length,open=!!SUCOPEN[k],hc=hcDe(k);
+    T.n+=n;T.d+=g.d;T.dp+=g.dp;T.f+=g.f;T.fmp+=g.fmp;T.p+=g.p;T.pp+=g.pp;if(hc)T.hc+=hc;else T.hcOk=false;
+    var a,pr,ok1,ok2;if(hc){a=asis(g.dp,hc);pr=prod(g.fmp,hc)}else{sinHC=true;a=asis(g.dp,n)+'<sup>†</sup>';pr=prod(g.fmp,n)+'<sup>†</sup>'}
+    ok1=Math.floor(g.dp/(hc||n))>=25;ok2=Math.floor(g.fmp/(hc||n)/26*10)/10>=3.5;
+    h+='<tr class="sg" onclick="togSuc(\''+k+'\')"><td class="nm"><span class="car">'+(open?'▾':'▸')+'</span>'+esc(sucName(c,k))+'</td><td class="r">'+(hc||'—')+'</td><td class="r '+(hc&&n<hc?'bad':'')+'">'+n+'</td><td class="r">'+g.d+'</td><td class="r '+(ok1?'ok':'bad')+'">'+a+'</td><td class="r">'+n0(g.f)+'</td><td class="r '+(ok2?'ok':'bad')+'">'+pr+'</td><td class="r">'+fmt(c.tecs[g.t[0]].precio)+(c.tecs[g.t[0]].especial?'<span class="esp">especial</span>':'')+'</td><td class="r"><b>'+fmt(g.p)+'</b></td>'+(fin?'':'<td class="r">'+fmt(g.pp)+'</td>')+'</tr>';
     if(open)g.t.slice().sort(function(a,b){return c.tecs[b].prodT-c.tecs[a].prodT}).forEach(function(i){var t=c.tecs[i];
-      h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
-  h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(T.dp/Math.max(1,T.n)).toFixed(1)+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(T.fp/Math.max(1,T.n)/26).toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
-  return h+'<div class="how">Días y folios por cuadrilla de cada sucursal se miden sobre las cuadrillas que trabajan ahí; el precio por folio se calcula '+(c.grupo?'por distrito (ver tabla Por distrito).':'para todo el contratista.')+'</div></div>';
+      h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
+  // Total: sobre el HC autorizado del contratista (o la suma de HC de las sucursales filtradas)
+  var hcT=SUC==='ALL'?c.hc:(T.hcOk?T.hc:null);
+  h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+(hcT||'—')+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(hcT?asis(T.dp,hcT):asis(T.dp,T.n)+'<sup>†</sup>')+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(hcT?prod(T.fmp,hcT):prod(T.fmp,T.n)+'<sup>†</sup>')+'</td><td class="r"></td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
+  return h+'<div class="how">Días y folios por cuadrilla se miden sobre el <b>HC autorizado</b> (las vacantes cuentan como 0), como el precio. Folios al día = folios sin día festivo ÷ HC ÷ 26.'+
+    (sinHC?' <sup>†</sup> Esta sucursal no tiene HC autorizado propio (comparte el del '+(c.grupo?'distrito':'contratista')+'), así que se mide sobre las cuadrillas que trabajan ahí.':'')+
+    ' El precio por folio se calcula '+(c.grupo?'por distrito (ver tabla Por distrito).':'para todo el contratista.')+'</div></div>';
+}
+function montoDesglose(c){ // suma visible del monto realizado: folios × precio + soporte + recolección + festivo
+  var d=c.desglose;if(!d)return '';
+  var n0=function(x){return Math.round(x||0).toLocaleString('en-US')}, L=[];
+  if(d.otras)L.push([n0(d.otras)+' folios a '+(c.grupo?'su precio de distrito':'$'+n0(d.otrasM/d.otras)),d.otrasM]);
+  if(d.sop)L.push([n0(d.sop)+' soportes a precio − $40',d.sopM]);
+  if(d.reco)L.push([n0(d.reco)+' recolecciones a $150',d.recoM]);
+  if(d.fest)L.push([n0(d.fest)+' folios en día festivo (+ bono)',d.festM]);
+  var f=d.otras+d.sop+d.reco+d.fest, tot=d.otrasM+d.sopM+d.recoM+d.festM;
+  return '<div style="margin-top:22px;border-top:1px solid rgba(255,255,255,.18);padding-top:14px;font-size:13px;color:rgba(255,255,255,.75)">'+
+    '<div style="font-weight:700;color:#fff;margin-bottom:8px">Así se arma'+(c.cerrado?'':' (a la fecha)')+'</div>'+
+    L.map(function(x){return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0"><span>'+x[0]+'</span><b style="color:#fff">'+fmt(x[1])+'</b></div>'}).join('')+
+    '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0 0;margin-top:4px;border-top:1px solid rgba(255,255,255,.18)"><span>'+n0(f)+' folios · promedio pagado '+fmt(f?tot/f:0)+' por folio</span><b style="color:#fff">'+fmt(tot)+'</b></div></div>';
 }
 function parteBlock(c){
   if(!c.grupo)return '';
