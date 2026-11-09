@@ -396,9 +396,12 @@ self.onmessage = function (e) {
     if (!wb.Sheets['Cierre Iguala'] || !wb.Sheets['Tecnicos']) throw new Error('El archivo no tiene las hojas "Cierre Iguala" y "Tecnicos".');
     post('Leyendo técnicos…');
     var T = XLSX.utils.sheet_to_json(wb.Sheets['Tecnicos'], { header: 1, raw: true });
-    var h = T.findIndex(function (r) { return r && r.indexOf('USUARIO FFM') >= 0; });
-    var hr = T[h], iU = hr.indexOf('USUARIO FFM'), iS = hr.indexOf('SUCURSAL'), iN = hr.indexOf('NOMBRE DEL TÉCNICO'),
-        iC = hr.indexOf('Contratista'), iT = hr.indexOf('Tipo');
+    var h = T.findIndex(function (r) { return r && r.some(function (x) { return String(x || '').trim().toUpperCase() === 'USUARIO FFM'; }); });
+    var hr = T[h].map(function (x) { return String(x || '').trim().toUpperCase(); });
+    function col() { for (var a = 0; a < arguments.length; a++) { var k = hr.indexOf(arguments[a]); if (k >= 0) return k; } return -1; }
+    var iU = col('USUARIO FFM'), iS = col('SUCURSAL'), iN = col('NOMBRE DEL TÉCNICO', 'NOMBRE DEL TECNICO'),
+        iC = col('CONTRATISTA'), iT = col('TIPO', 'TIPO DISTRITO');
+    if (iC < 0) throw new Error('La hoja "Tecnicos" no tiene la columna "Contratista".');
     var tec = {};
     for (var i = h + 1; i < T.length; i++) { var r = T[i]; if (!r || !r[iU]) continue;
       tec[r[iU]] = { nombre: r[iN], sucursal: String(r[iS] || ''), contratista: String(r[iC] || ''), tipo: r[iT] }; }
@@ -571,8 +574,8 @@ function renderRes(){
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(fin?'Costo del mes':'Costo estimado del mes, al ritmo actual')+'</div><div class="v">'+fmt(fin?T.cob:T.cie)+'<sup>*</sup></div>'+
      (fin?'<div class="s">Mes completo: <b>'+n0(T.fh)+' folios</b></div>':'<div class="s">Costo a la fecha: <b>'+fmt(T.cob)+'</b> al '+corteD+' de '+mesN+'</div>')+'</div><div class="n">* Antes de descuentos. '+(fin?'No oficial.':'Estimado, no oficial.')+'</div></div>'+
      '<div class="c-price"><div class="top"><span class="l">Precio promedio por folio</span><span class="v">'+fmt(precio)+'</span></div><div class="nrm" style="text-align:right">ponderado por folios'+(fin?'':' estimados')+'</div><div class="why">'+
-     '<div class="w"><div class="t">Días por cuadrilla<span>'+(fin?'del mes':'estimado al cierre')+' · meta 25</span></div><div class="a '+(asis>=25?'up':'dn')+'">'+asis.toFixed(1)+'</div></div>'+
-     '<div class="w"><div class="t">Folios al día<span>'+(fin?'del mes':'estimado al cierre')+' · meta 3.5</span></div><div class="a '+(prod>=3.5?'up':'dn')+'">'+prod.toFixed(2)+'</div></div>'+
+     '<div class="w"><div class="t">Días por cuadrilla<span>'+(fin?'del mes':'estimado al cierre')+' · meta 25</span></div><div class="a '+(asis>=25?'up':'dn')+'">'+Math.floor(asis)+'</div></div>'+
+     '<div class="w"><div class="t">Folios al día<span>'+(fin?'del mes':'estimado al cierre')+' · meta 3.5</span></div><div class="a '+(prod>=3.5?'up':'dn')+'">'+(Math.floor(prod*10)/10).toFixed(1)+'</div></div>'+
      '<div class="w"><div class="t">Folios realizados<span>al '+corteD+' de '+mesN+' · póliza '+n0(poliza)+'</span></div><div class="a">'+n0(T.fh)+'</div></div>'+
      (fin?'':'<div class="w"><div class="t">Folios estimados<span>al cierre, al ritmo actual</span></div><div class="a">'+n0(T.fp)+'</div></div>')+
      '</div></div></div>';
@@ -581,11 +584,11 @@ function renderRes(){
   var rows=L.slice().sort(function(a,b){return b.cierre-a.cierre});
   h+='<div class="blk"><div class="blk-h"><span class="t">Por contratista</span><span class="s">Clic para ver el detalle</span></div><div class="tw2"><table class="rs"><thead><tr>'+
      '<th>Contratista</th><th class="r">HC</th><th class="r">Trabajando</th><th class="r">Días / cuadrilla</th><th class="r">Folios / día</th><th class="r">Precio</th><th class="r">Folios MTD</th>'+(fin?'':'<th class="r">Folios est.</th>')+'<th class="r">'+(fin?'Costo del mes*':'Costo a la fecha*')+'</th>'+(fin?'':'<th class="r">Costo estimado*</th>')+'</tr></thead><tbody>';
-  rows.forEach(function(c){var i=RES.contratistas.indexOf(c), a=c.proy.asistReal, p=c.proy.prodReal;
+  rows.forEach(function(c){var i=RES.contratistas.indexOf(c), a=c.proy.asist, p=c.proy.prod;
     h+='<tr onclick="pick('+i+')"><td class="nm">'+esc(titleName(c.nombre))+'</td><td class="r">'+c.hc+'</td><td class="r '+(c.activos<c.hc?'bad':'')+'">'+c.activos+'</td>'+
-       '<td class="r '+(c.proy.asist>=25?'ok':'bad')+'">'+a.toFixed(1)+'</td><td class="r '+(c.proy.prod>=3.5?'ok':'bad')+'">'+p.toFixed(2)+'</td>'+
+       '<td class="r '+(c.proy.asist>=25?'ok':'bad')+'">'+a+'</td><td class="r '+(c.proy.prod>=3.5?'ok':'bad')+'">'+p.toFixed(1)+'</td>'+
        '<td class="r"><b>'+fmt(c.precioTipo)+'</b></td><td class="r">'+n0(c.hoy.folios)+'</td>'+(fin?'':'<td class="r">'+n0(c.folios)+'</td>')+'<td class="r">'+(fin?'<b>'+fmt(c.cobrado)+'</b>':fmt(c.cobrado))+'</td>'+(fin?'':'<td class="r"><b>'+fmt(c.cierre)+'</b></td>')+'</tr>'});
-  h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+T.hc+'</td><td class="r">'+T.act+'</td><td class="r">'+asis.toFixed(1)+'</td><td class="r">'+prod.toFixed(2)+'</td><td class="r">'+fmt(precio)+'</td><td class="r">'+n0(T.fh)+'</td>'+(fin?'':'<td class="r">'+n0(T.fp)+'</td>')+'<td class="r">'+fmt(T.cob)+'</td>'+(fin?'':'<td class="r">'+fmt(T.cie)+'</td>')+'</tr></tfoot></table></div></div>';
+  h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+T.hc+'</td><td class="r">'+T.act+'</td><td class="r">'+Math.floor(asis)+'</td><td class="r">'+(Math.floor(prod*10)/10).toFixed(1)+'</td><td class="r">'+fmt(precio)+'</td><td class="r">'+n0(T.fh)+'</td>'+(fin?'':'<td class="r">'+n0(T.fp)+'</td>')+'<td class="r">'+fmt(T.cob)+'</td>'+(fin?'':'<td class="r">'+fmt(T.cie)+'</td>')+'</tr></tfoot></table></div></div>';
   if(E.length)h+='<div class="err" style="margin-top:16px">Sin HC autorizado en '+mesN+': '+E.map(function(c){return esc(titleName(c.nombre))}).join(', ')+'. Agrégalo en <a style="color:inherit;font-weight:800;cursor:pointer" onclick="go(\'hc\')">HC autorizado</a>.</div>';
   h+='<div class="foot">* Montos '+(fin?'':'estimados ')+'antes de descuentos, sujetos a cambios y no garantizados. HC tomado de '+HC_SRC+(HC_DIRTY?' + cambios locales sin publicar':'')+'.</div></div>';
   $('view').innerHTML=h;
@@ -639,8 +642,8 @@ function renderHC(){
 function pbRows(){ // contratista × distrito según el archivo cargado
   var R={};
   Object.keys(DATA.tec).forEach(function(u){var t=DATA.tec[u],c=String(t.contratista||'').trim().toUpperCase();if(!c||c==='INTERNO')return;
-    var ct=null;Calc.CONTRATISTAS.forEach(function(x){if(!ct&&x.re.test(c))ct=x});if(!ct)return;
-    var m=String(t.sucursal).match(/INT-([A-Z]+)/);if(!m)return;var d=m[1],k=ct.id+'|'+d;
+    var m=String(t.sucursal).match(/INT-([A-Z]+)/);if(!m)return;var d=m[1];
+    var ct=Calc.matchC(c,d);if(!ct)return;var k=ct.id+'|'+d;
     if(!R[k])R[k]={k:k,ct:ct,d:d,name:String(t.sucursal).replace(/^.*?INT-[A-Z]+\s*/,'').toLowerCase().replace(/(^|\s)(\S)/g,function(a,b,c){return b+c.toUpperCase()}).replace(/\bGdl\b/g,'GDL'),n:0};R[k].n++});
   var order=Calc.CONTRATISTAS.map(function(x){return x.id});
   return Object.keys(R).map(function(k){return R[k]}).sort(function(a,b){return order.indexOf(a.ct.id)-order.indexOf(b.ct.id)||a.name.localeCompare(b.name)});
@@ -728,14 +731,15 @@ function renderC(){
   var vac=c.vacantes;
   h+='<div class="meta"><span>HC autorizado: <b>'+c.hc+' cuadrillas</b></span><span>Trabajando: <b class="'+(vac?'bad':'')+'">'+c.activos+' de '+c.hc+'</b></span><span>'+(c.tipoPrincipal==='LM'?'Tabla López Mateos':'Distritos Tipo '+c.tipoPrincipal)+'</span><span>Folios realizados: <b>'+Math.round(c.hoy.folios).toLocaleString('en-US')+'</b>'+(c.cerrado?'':' · estimado al cierre <b>'+Math.round(c.folios).toLocaleString('en-US')+'</b>')+'</span><span>'+(c.cerrado?'<b>Mes cerrado</b>':'Faltan <b>'+c.restH+' días</b> hábiles')+'</span></div></div>';
   // 1. dinero + 2. precio
-  var normal=c.precioTipo-c.adjAsist-c.adjProd, aP=c.proy.asistReal, pP=c.proy.prodReal;
+  // Se muestran los mismos valores con los que se calcula el precio: días sin decimales y folios al día a un decimal, truncados (hoja Resultados)
+  var normal=c.precioTipo-c.adjAsist-c.adjProd, aP=c.proy.asist, pP=c.proy.prod;
   function adj(n){return n>0?'+$'+n:n<0?'−$'+(-n):'$0'}
   function bar(v,max,goal,ok){return '<div class="bar"><i style="width:'+Math.min(100,v/max*100)+'%;background:'+(ok?'var(--qg)':'var(--red)')+'"></i><u style="left:'+(goal/max*100)+'%"></u></div>'}
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(c.cerrado?'Cerraste '+mesN+' con':'Así vas al '+corteD+' de '+mesN)+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
      (c.cerrado?'':'<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>')+(!c.cerrado&&c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
      '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
   h+='<div class="c-price"><div class="top"><span class="l">Precio por folio'+(c.variosPrecios?' <span style="font-weight:500;color:var(--g5)">(promedio)</span>':'')+'</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">'+(c.variosPrecios?'varía por sucursal · ver tabla por sucursal':'precio normal '+fmt(normal))+(c.especial?' · incluye precio especial':'')+'</div><div class="why">'+
-     '<div class="w"><div class="t">Días trabajados<span>'+aP.toFixed(1)+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
+     '<div class="w"><div class="t">Días trabajados<span>'+aP+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
      '<div class="w"><div class="t">Folios al día<span>'+pP.toFixed(1)+' por cuadrilla · meta 3.5</span></div><div class="a '+(c.adjProd>0?'up':'z')+'">'+adj(c.adjProd)+'</div>'+bar(pP,5,3.5,pP>=3.5)+'</div>'+
      '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
   // 3. acciones
@@ -743,7 +747,7 @@ function renderC(){
   var vacF=SUC==='ALL'?vac:0;
   var st=[
     {ok:!vac,v:c.activos+' de '+c.hc,t:'Cuadrillas trabajando',s:vac?(vac+' lugar'+(vac>1?'es':'')+' de tu HC autorizado sin cubrir.'):'Tu HC autorizado está completo.'},
-    {ok:c.adjAsist>=0,v:aP.toFixed(1)+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla. Hoy cuenta como '+c.proy.asist+'.'},
+    {ok:c.adjAsist>=0,v:aP+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla.'},
     {ok:c.proy.prod>=3.5,v:pP.toFixed(1)+' folios',t:'Folios al día',s:'Meta: 3.5 folios al día por cuadrilla.'}];
   h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">'+(c.cerrado?'mes completo':'estimado al cierre del mes')+'</span></div><div class="acts3">';
   st.forEach(function(a){h+='<div class="ac'+(a.ok?' ok':' warn')+'"><div class="g">'+(a.ok?'✓ ':'')+a.v+'</div><b>'+a.t+'</b><span>'+a.s+'</span></div>'});

@@ -1,6 +1,6 @@
 # CONTEXT — Avance de Contratistas (QiORA Conecta)
 
-> Leer esto al retomar el proyecto. Última actualización: 2026-11-02.
+> Leer esto al retomar el proyecto. Última actualización: 2026-11-09.
 
 ## Qué es
 Página web estática (GitHub Pages) para que la **coordinadora de contratistas** vea cómo va cada contratista en el mes bajo el **nuevo esquema "destajo con póliza"** y descargue un HTML individual por contratista para mandárselo (WhatsApp, captura).
@@ -22,7 +22,7 @@ Página web estática (GitHub Pages) para que la **coordinadora de contratistas*
 Archivo de cálculo de bonos (ej. `Archivo de cálculo esqumea OS v7.xlsx`, `...al 11 de Octubre OS v6.xlsx`), ~25–50 MB. Hojas usadas:
 - **Cierre Iguala**: `Fecha Termino`, `Usuario para pago`, `Servicio`.
 - **Tecnicos**: fila de encabezado con `USUARIO FFM`, `SUCURSAL`, `NOMBRE DEL TÉCNICO`, `Contratista` ("Interno" o nombre), `Tipo` (A/B).
-El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Iguala NO trae columna Contratista.
+El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados de Tecnicos se leen sin importar mayúsculas (el archivo de cálculo trae `CONTRATISTA` y `Tipo distrito`). El Cierre Iguala NO trae columna Contratista.
 
 ## Reglas de cálculo (calc.js)
 - **Periodo mensual**: del día 1 al último día del mes por `Fecha Termino`. Folios de otros meses nunca cuentan, aunque la semana de bonos cruce meses. Corte = última fecha del mes presente en el archivo. Meses que no empiezan en día ≤3 se marcan "incompleto".
@@ -30,17 +30,19 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. El Cierre Igu
 - Folios: excluyen día festivo; soporte y recolección se separan. Festivo: folios a precio (sin descuento soporte) + bono $350 si ≥3 folios (sin recolecciones).
 - Asistencia contratista = floor(Σ días / HC autorizado). Productividad = floor1(Σ folios / HC / 26).
 - Precio Tipo A: normal 480, piso 450, techo 520. 24 días −15, ≤23 −30. +20 por cada 0.1 arriba de 3.5 (hasta 3.8), con tope techo. Tipo B = A − 40 (410/440/480). López Mateos = A + 50 (500/530/570).
-- Tipo por técnico: GLM → LM; GBA/GES/GPR o Tipo=A → A; resto B. El precio se calcula **por contratista** (un ajuste) y se aplica por tipo de distrito de cada técnico.
+- **Fuente de verdad del precio = hoja `Resultados` del archivo de cálculo mensual** (`CONTRATISTAS/Cálculos contratistas/oct-26 Contratistas archivo cálculo.xlsx`). Validado 2026-11-09: oct-26 cuadra al peso en los 12 contratistas salvo Irapuato (ver pendientes).
+- Tipo por distrito (= hoja Glosario): GLM → LM; GBA/GES/GPR/**TEP/COL** → A; resto B (`tipoDist`). Ya no se usa la columna Tipo de la hoja Tecnicos (dice B para Tepic/Colima). El precio se calcula **por contratista** (un ajuste) y se aplica por tipo de distrito de cada técnico.
+- Pantallas muestran días/cuadrilla y folios/día **truncados** (entero y 1 decimal), los mismos valores que entran a la tabla de precio; antes se mostraban redondeados y no cuadraban con el precio.
 - Soporte = precio − 40. Recolección = $150.
 - **Pronóstico**: días hábiles = lunes–sábado del mes (octubre 2026 = 27). Cada técnico sigue su ritmo: días_proy = d + (d/días_pasados)·días_restantes (tope total del mes); folios/día trabajado constante.
 - Grupos técnico: **Debajo de la meta** (máx posible < 25 días), **Cerca de la meta**, **En meta** (≥24.5 días proy y ≥3.5 folios/día sobre 26).
-- **Marco Anaya incluido como UN solo contratista** (decisión Giacomo 2026-11-02: un HC y un ajuste de precio para todos sus distritos, no por distrito). HC = 59 (PDF; el Excel de cálculo traía 48). Precio por técnico según su tipo (León/Tepic/Colima B, GDL A, López Mateos LM).
+- **Marco Anaya = 4 contratistas por distrito** (2026-11-09, igual que la hoja Resultados; reemplaza la decisión del 02-nov de un solo contratista): `MA_TEP` Tepic HC 21, `MA_COL` Colima HC 9, `MA_GDL` Guadalajara (GES/GPR/GBA/GLM) HC 4, `MA_LON` León HC 14. Se asigna por nombre MARCO ANAYA + distrito de la sucursal (`matchC(nombre, dist)`). Cada uno tiene su propio ajuste de asistencia/productividad.
 - **Mes cerrado** = no quedan días hábiles después del corte (`cerrado`): se ocultan folios/costos estimados y solo se muestran los realizados.
 - Festivos 2026 en `FESTIVOS`.
 
 ## HC autorizado
 - Vive en **`hc.json`** (`{"2026-09": {"OMAR":17,...}, ...}`). Herencia por contratista: mes sin valor usa el último mes anterior definido.
-- Valores sep-26 = oct-26: OMAR 17, CARLOS 13, MGG 11, ESM 10, ELI 10, ORT 8, MIG 5, JPV 4.
+- Valores sep-26 = oct-26: OMAR 17, CARLOS 13, MGG 11, ESM 10, ELI 10, ORT 8, MIG 5, JPV 4, MA_TEP 21, MA_COL 9, MA_GDL 4, MA_LON 14 (OMAR oct estaba en 18 y se regresó a 17 como el Excel).
 - Pantalla **"HC autorizado"**: matriz sep-26…dic-27 editable; recalcula al instante; cambios en localStorage ("sin publicar"); botón **Publicar en GitHub** (PUT a contents API con token del usuario, opcionalmente recordado en ese navegador); descargar / descartar.
 - En `file://` no puede leer hc.json → usa los valores embebidos en `calc.js` (`HC_MES`), mantenerlos sincronizados.
 - Nombres: `CONTRATISTAS` en calc.js con regex, porque cada archivo los escribe distinto (p.ej. "CARLOS MARTINEZ PALACI" vs "...PALACIO / ALEJANDRO DEL VALLE"). **Agustín Valencia Casillas + Juan Pablo Valencia se agrupan como "Grupo Onwars" (HC 4)** — pendiente confirmar con Giacomo.
@@ -67,6 +69,9 @@ Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip
 - CDNs: SheetJS 0.18.5, JSZip 3.10.1 (cdnjs), Google Fonts.
 
 ## Pendientes / preguntas abiertas
+- **Irapuato**: no está en Glosario del Excel → la hoja Resultados lo paga como A ($450) aunque es B ($410). La herramienta lo deja B. Diferencia oct-26: $7,400 (María Gpe González). Confirmar con Giacomo.
+- Asistencia de Miguel Esquivel (28 vs 29) y Colima MA (25 vs 26) difieren del Excel porque el Excel usa la hoja Detalle de servicios; no cambia el precio en oct-26.
+- HC sep-26 de MA se puso igual que oct-26 (el Excel de sep no los incluía).
 - Confirmar agrupación Agustín Valencia + JP Valencia (HC 4).
 - Omar (18 de 17) y Esmeralda (11 de 10) traen más cuadrillas que HC en octubre: ¿correcto o cambió el HC?
 - Octubre tiene 27 días hábiles lun–sáb; productividad se mide sobre 26. Confirmar criterio.

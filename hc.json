@@ -8,10 +8,13 @@
     "ORT": 8,
     "MIG": 5,
     "JPV": 4,
-    "MA": 59
+    "MA_TEP": 21,
+    "MA_COL": 9,
+    "MA_GDL": 4,
+    "MA_LON": 14
   },
   "2026-10": {
-    "OMAR": 18,
+    "OMAR": 17,
     "CARLOS": 13,
     "MGG": 11,
     "ESM": 10,
@@ -19,6 +22,9 @@
     "ORT": 8,
     "MIG": 5,
     "JPV": 4,
-    "MA": 48
+    "MA_TEP": 21,
+    "MA_COL": 9,
+    "MA_GDL": 4,
+    "MA_LON": 14
   }
 }

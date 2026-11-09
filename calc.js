@@ -11,11 +11,15 @@
     { id: 'ORT', nombre: 'María Gpe Ortiz / Andrés Ortiz', re: /ORTIZ/ },
     { id: 'MIG', nombre: 'Miguel Ángel Esquivel', re: /MIGUEL ANGEL ESQUIVEL/ },
     { id: 'JPV', nombre: 'Juan Pablo Valencia / Grupo Onwars', re: /JUAN PABLO VALENCIA|AGUSTIN VALENCIA|ONWARS/ },
-    { id: 'MA', nombre: 'Marco Anaya', re: /MARCO ANAYA/ }
+    // Marco Anaya: un contratista por distrito, cada uno con su HC y su precio (como la hoja Resultados del archivo de cálculo)
+    { id: 'MA_TEP', nombre: 'Marco Anaya Tepic', re: /MARCO ANAYA/, dist: /^TEP$/ },
+    { id: 'MA_COL', nombre: 'Marco Anaya Colima', re: /MARCO ANAYA/, dist: /^COL$/ },
+    { id: 'MA_GDL', nombre: 'Marco Anaya Guadalajara', re: /MARCO ANAYA/, dist: /^(GES|GPR|GBA|GLM)$/ },
+    { id: 'MA_LON', nombre: 'Marco Anaya León', re: /MARCO ANAYA/, dist: /^LON$/ }
   ];
   var HC_MES = {
-    '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 },
-    '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA: 59 }
+    '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA_TEP: 21, MA_COL: 9, MA_GDL: 4, MA_LON: 14 },
+    '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA_TEP: 21, MA_COL: 9, MA_GDL: 4, MA_LON: 14 }
   };
   // Precio base especial por contratista y distrito: {'2026-10': {'MA|TEP': 480}}. Mes sin valor hereda el último anterior.
   var PRECIOS = {};
@@ -24,8 +28,12 @@
     for (var i = 0; i < ks.length; i++) { var v = PRECIOS[ks[i]][k]; if (v != null && v !== '') return +v; }
     return null;
   }
-  function tipoDist(dist) { return dist === 'GLM' ? 'LM' : /^(GBA|GES|GPR)$/.test(dist) ? 'A' : 'B'; }
-  function matchC(name) { var n = norm(name); for (var i = 0; i < CONTRATISTAS.length; i++) if (CONTRATISTAS[i].re.test(n)) return CONTRATISTAS[i]; return null; }
+  // Tipo de distrito = hoja Glosario del archivo de cálculo: GDL, Tepic y Colima son A; López Mateos = A + $50; el resto B.
+  function tipoDist(dist) { return dist === 'GLM' ? 'LM' : /^(GBA|GES|GPR|TEP|COL)$/.test(dist) ? 'A' : 'B'; }
+  function distDe(sucursal) { return (String(sucursal || '').match(/INT-([A-Z]+)/) || [, ''])[1]; }
+  function matchC(name, dist) { var n = norm(name);
+    for (var i = 0; i < CONTRATISTAS.length; i++) { var c = CONTRATISTAS[i]; if (c.re.test(n) && (!c.dist || c.dist.test(dist || ''))) return c; }
+    return null; }
   // Busca el HC del contratista en el mes; si el mes no lo trae, usa el último mes anterior que sí.
   function hcFor(id, monthKey) {
     var ks = Object.keys(HC_MES).filter(function (k) { return k <= monthKey; }).sort().reverse();
@@ -90,12 +98,12 @@
         if (x.dias[kk]) break;
         if (new Date(y, m, dd).getDay() !== 0) sinAct++;
       }
-      var tipo = /GLM|LOPEZ MATEOS/i.test(t.sucursal) ? 'LM' : (t.tipo === 'A' || /INT-(GBA|GES|GPR)/.test(t.sucursal) ? 'A' : 'B');
-      var tec = { u: u, nombre: t.nombre || u, sucursal: t.sucursal, dist: (t.sucursal.match(/INT-([A-Z]+)/) || [, ''])[1], tipo: tipo,
+      var dist = distDe(t.sucursal), tipo = tipoDist(dist);
+      var tec = { u: u, nombre: t.nombre || u, sucursal: t.sucursal, dist: dist, tipo: tipo,
         d: d, dProj: Math.min(totH, d + addD), maxPos: d + restH,
         fol: x.fol, folProj: x.fol + fpd * addD, sop: x.sop, reco: x.reco, fest: x.fest, k: k,
         porDia: x.dias, porTipo: x.porTipo, fpd: fpd, sinAct: sinAct, ultimo: ultimo, fpdT: d ? (x.fol + x.fest) / d : 0 };
-      var ent = matchC(c), key = ent ? ent.id : c;
+      var ent = matchC(c, dist), key = ent ? ent.id : c;
       (byC[key] = byC[key] || { id: ent && ent.id, nombre: ent ? ent.nombre : titleCase(t.contratista), tecs: [] }).tecs.push(tec);
     });
 
@@ -178,6 +186,6 @@
 
   root.Calc = { compute: compute, iso: iso, CONTRATISTAS: CONTRATISTAS, hcFor: hcFor,
     getHC: function () { return JSON.parse(JSON.stringify(HC_MES)); }, setHC: function (o) { HC_MES = o || {}; },
-    getPrecios: function () { return JSON.parse(JSON.stringify(PRECIOS)); }, setPrecios: function (o) { PRECIOS = o || {}; }, baseFor: baseFor, tipoDist: tipoDist, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
+    getPrecios: function () { return JSON.parse(JSON.stringify(PRECIOS)); }, setPrecios: function (o) { PRECIOS = o || {}; }, baseFor: baseFor, tipoDist: tipoDist, matchC: matchC, distDe: distDe, P: P, FESTIVOS: FESTIVOS, precioA: precioA };
   if (typeof module !== 'undefined') module.exports = root.Calc;
 })(typeof self !== 'undefined' ? self : this);
