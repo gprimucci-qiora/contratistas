@@ -37,6 +37,7 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 - **Pronóstico**: días hábiles = lunes–sábado del mes (octubre 2026 = 27). Cada técnico sigue su ritmo: días_proy = d + (d/días_pasados)·días_restantes (tope total del mes); folios/día trabajado constante.
 - Grupos técnico: **Debajo de la meta** (máx posible < 25 días), **Cerca de la meta**, **En meta** (≥24.5 días proy y ≥3.5 folios/día sobre 26).
 - **Marco Anaya = 4 contratistas por distrito** (2026-11-09, igual que la hoja Resultados; reemplaza la decisión del 02-nov de un solo contratista): `MA_TEP` Tepic HC 21, `MA_COL` Colima HC 9, `MA_GDL` Guadalajara (GES/GPR/GBA/GLM) HC 4, `MA_LON` León HC 14. Se asigna por nombre MARCO ANAYA + distrito de la sucursal (`matchC(nombre, dist)`). Cada uno tiene su propio ajuste de asistencia/productividad.
+- **En pantalla Marco Anaya aparece como UN contratista** (`grupo: 'MA'` en CONTRATISTAS; `agrupar()` en calc.js): suma HC, cuadrillas, folios y montos; precio = promedio ponderado por folios; `partes` trae cada distrito con su HC, días, folios/día, ajustes y precio. Resumen: fila Marco Anaya + sub-filas por distrito. Vista contratista: tarjeta de precio por distrito + bloque **Por distrito** (también en el HTML descargado). HC y precio base se capturan por distrito (MA_TEP, MA_COL, MA_GDL, MA_LON).
 - **Mes cerrado** = no quedan días hábiles después del corte (`cerrado`): se ocultan folios/costos estimados y solo se muestran los realizados.
 - Festivos 2026 en `FESTIVOS`.
 

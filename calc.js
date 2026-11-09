@@ -12,11 +12,13 @@
     { id: 'MIG', nombre: 'Miguel Ángel Esquivel', re: /MIGUEL ANGEL ESQUIVEL/ },
     { id: 'JPV', nombre: 'Juan Pablo Valencia / Grupo Onwars', re: /JUAN PABLO VALENCIA|AGUSTIN VALENCIA|ONWARS/ },
     // Marco Anaya: un contratista por distrito, cada uno con su HC y su precio (como la hoja Resultados del archivo de cálculo)
-    { id: 'MA_TEP', nombre: 'Marco Anaya Tepic', re: /MARCO ANAYA/, dist: /^TEP$/ },
-    { id: 'MA_COL', nombre: 'Marco Anaya Colima', re: /MARCO ANAYA/, dist: /^COL$/ },
-    { id: 'MA_GDL', nombre: 'Marco Anaya Guadalajara', re: /MARCO ANAYA/, dist: /^(GES|GPR|GBA|GLM)$/ },
-    { id: 'MA_LON', nombre: 'Marco Anaya León', re: /MARCO ANAYA/, dist: /^LON$/ }
+    // En pantalla se agrupan como un solo contratista (`grupo`) con desglose por distrito (`corto`).
+    { id: 'MA_TEP', nombre: 'Marco Anaya Tepic', corto: 'Tepic', re: /MARCO ANAYA/, dist: /^TEP$/, grupo: 'MA' },
+    { id: 'MA_COL', nombre: 'Marco Anaya Colima', corto: 'Colima', re: /MARCO ANAYA/, dist: /^COL$/, grupo: 'MA' },
+    { id: 'MA_GDL', nombre: 'Marco Anaya Guadalajara', corto: 'Guadalajara', re: /MARCO ANAYA/, dist: /^(GES|GPR|GBA|GLM)$/, grupo: 'MA' },
+    { id: 'MA_LON', nombre: 'Marco Anaya León', corto: 'León', re: /MARCO ANAYA/, dist: /^LON$/, grupo: 'MA' }
   ];
+  var GRUPOS = { MA: 'Marco Anaya' };
   var HC_MES = {
     '2026-09': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA_TEP: 21, MA_COL: 9, MA_GDL: 4, MA_LON: 14 },
     '2026-10': { OMAR: 17, CARLOS: 13, MGG: 11, ESM: 10, ELI: 10, ORT: 8, MIG: 5, JPV: 4, MA_TEP: 21, MA_COL: 9, MA_GDL: 4, MA_LON: 14 }
@@ -178,8 +180,40 @@
       r.vacantes = Math.max(0, vac);
       return r;
     });
+    out = agrupar(out);
     out.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
     return { monthKey: monthKey, corte: corte, contratistas: out };
+  }
+  // Junta las unidades de un grupo (p.ej. Marco Anaya por distrito) en un solo contratista.
+  // Cada distrito conserva su HC, su ajuste y su precio; el grupo solo suma y trae el desglose en `partes`.
+  function agrupar(out) {
+    var byId = {}; CONTRATISTAS.forEach(function (c) { byId[c.id] = c; });
+    var G = {}, rest = [];
+    out.forEach(function (r) { var ent = r.id && byId[r.id];
+      if (ent && ent.grupo) (G[ent.grupo] = G[ent.grupo] || []).push(r); else rest.push(r); });
+    Object.keys(G).forEach(function (g) {
+      var P_ = G[g].sort(function (a, b) { return (b.hc || 0) - (a.hc || 0); }), ok = P_.filter(function (r) { return !r.error; });
+      var f = P_[0], r = { id: g, nombre: GRUPOS[g] || g, grupo: true, corte: f.corte, totH: f.totH, pasH: f.pasH, restH: f.restH, cerrado: f.cerrado,
+        hc: 0, activos: 0, vacantes: 0, cobrado: 0, cierre: 0, dias: 0, folios: 0, hoy: { dias: 0, folios: 0 }, tecs: [], partes: [] };
+      P_.forEach(function (p) {
+        var ent = byId[p.id];
+        p.tecs.forEach(function (t) { t.parte = p.id; r.tecs.push(t); });
+        r.partes.push({ id: p.id, nombre: ent.corto || p.nombre, error: p.error, hc: p.hc, activos: p.activos, vacantes: p.vacantes,
+          proy: p.proy, precioTipo: p.precioTipo, tipoPrincipal: p.tipoPrincipal, adjAsist: p.adjAsist, adjProd: p.adjProd,
+          especial: p.especial, cobrado: p.cobrado, cierre: p.cierre, folios: p.folios, hoyFolios: p.hoy && p.hoy.folios });
+      });
+      if (!ok.length) { r.error = 'Sin HC autorizado'; r.hc = null; rest.push(r); return; }
+      var wf = 0, wp = 0;
+      ok.forEach(function (p) { r.hc += p.hc; r.activos += p.activos; r.vacantes += p.vacantes; r.cobrado += p.cobrado; r.cierre += p.cierre;
+        r.dias += p.dias; r.folios += p.folios; r.hoy.dias += p.hoy.dias; r.hoy.folios += p.hoy.folios; wf += p.folios; wp += p.folios * p.precioTipo; });
+      r.proy = { asist: Math.floor(r.dias / r.hc), prod: Math.floor(r.folios / r.hc / P.diasMes * 10) / 10 };
+      r.precioTipo = wf ? Math.round(wp / wf) : ok[0].precioTipo;
+      r.variosPrecios = true; r.especial = ok.some(function (p) { return p.especial; });
+      r.tipoPrincipal = mainTipo(r.tecs); r.metaDias = r.hc * P.metaDias; r.poliza = r.hc * P.metaProd * P.diasMes;
+      r.faltaHC = P_.filter(function (p) { return p.error; }).map(function (p) { return byId[p.id].corto; });
+      rest.push(r);
+    });
+    return rest;
   }
   function mainTipo(tecs) { var c = {}; tecs.forEach(function (t) { c[t.tipo] = (c[t.tipo] || 0) + 1; });
     return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0] || 'A'; }

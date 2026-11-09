@@ -437,7 +437,7 @@ function stripC(c){ // solo lo que la página individual necesita
 function buildExport(c){
   var css=document.querySelector('style').textContent;
   var lite='var P='+JSON.stringify(Calc.P)+';var Calc={P:P,FESTIVOS:'+JSON.stringify(Calc.FESTIVOS)+',precioA:'+Calc.precioA.toString()+'};';
-  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules,sucName,setSucC,togSuc,sucBlock].map(function(f){return f.toString()}).join('\n');
+  var fns=[esc,fmt,cap,titleName,openMo,closeMo,cur,counts,renderC,openTec,priceTable,openRules,sucName,setSucC,togSuc,sucBlock,parteBlock].map(function(f){return f.toString()}).join('\n');
   var data='var MESES='+JSON.stringify(MESES)+';var RES='+JSON.stringify({monthKey:RES.monthKey,corte:RES.corte,contratistas:[stripC(c)]}).replace(/</g,'\\u003c')+';var IDX=0,RT="A",SUC="ALL",SUCOPEN={};';
   var js=lite+'\n'+data+'\n'+fns+'\nfunction $(id){return document.getElementById(id)}\nfunction sidebar(){}\n'+
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});renderC();';
@@ -587,7 +587,11 @@ function renderRes(){
   rows.forEach(function(c){var i=RES.contratistas.indexOf(c), a=c.proy.asist, p=c.proy.prod;
     h+='<tr onclick="pick('+i+')"><td class="nm">'+esc(titleName(c.nombre))+'</td><td class="r">'+c.hc+'</td><td class="r '+(c.activos<c.hc?'bad':'')+'">'+c.activos+'</td>'+
        '<td class="r '+(c.proy.asist>=25?'ok':'bad')+'">'+a+'</td><td class="r '+(c.proy.prod>=3.5?'ok':'bad')+'">'+p.toFixed(1)+'</td>'+
-       '<td class="r"><b>'+fmt(c.precioTipo)+'</b></td><td class="r">'+n0(c.hoy.folios)+'</td>'+(fin?'':'<td class="r">'+n0(c.folios)+'</td>')+'<td class="r">'+(fin?'<b>'+fmt(c.cobrado)+'</b>':fmt(c.cobrado))+'</td>'+(fin?'':'<td class="r"><b>'+fmt(c.cierre)+'</b></td>')+'</tr>'});
+       '<td class="r"><b>'+fmt(c.precioTipo)+'</b>'+(c.grupo?'<span class="esp">prom.</span>':'')+'</td><td class="r">'+n0(c.hoy.folios)+'</td>'+(fin?'':'<td class="r">'+n0(c.folios)+'</td>')+'<td class="r">'+(fin?'<b>'+fmt(c.cobrado)+'</b>':fmt(c.cobrado))+'</td>'+(fin?'':'<td class="r"><b>'+fmt(c.cierre)+'</b></td>')+'</tr>';
+    if(c.grupo)c.partes.forEach(function(p){
+      h+='<tr class="st" onclick="pick('+i+')"><td class="nm" style="padding-left:30px">'+esc(p.nombre)+'</td>'+(p.error?'<td class="r bad" colspan="'+(fin?7:9)+'">sin HC autorizado</td></tr>':
+        '<td class="r">'+p.hc+'</td><td class="r '+(p.activos<p.hc?'bad':'')+'">'+p.activos+'</td><td class="r '+(p.proy.asist>=25?'ok':'bad')+'">'+p.proy.asist+'</td><td class="r '+(p.proy.prod>=3.5?'ok':'bad')+'">'+p.proy.prod.toFixed(1)+'</td>'+
+        '<td class="r">'+fmt(p.precioTipo)+'</td><td class="r">'+n0(p.hoyFolios)+'</td>'+(fin?'':'<td class="r">'+n0(p.folios)+'</td>')+'<td class="r">'+fmt(p.cobrado)+'</td>'+(fin?'':'<td class="r">'+fmt(p.cierre)+'</td>')+'</tr>')})});
   h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+T.hc+'</td><td class="r">'+T.act+'</td><td class="r">'+Math.floor(asis)+'</td><td class="r">'+(Math.floor(prod*10)/10).toFixed(1)+'</td><td class="r">'+fmt(precio)+'</td><td class="r">'+n0(T.fh)+'</td>'+(fin?'':'<td class="r">'+n0(T.fp)+'</td>')+'<td class="r">'+fmt(T.cob)+'</td>'+(fin?'':'<td class="r">'+fmt(T.cie)+'</td>')+'</tr></tfoot></table></div></div>';
   if(E.length)h+='<div class="err" style="margin-top:16px">Sin HC autorizado en '+mesN+': '+E.map(function(c){return esc(titleName(c.nombre))}).join(', ')+'. Agrégalo en <a style="color:inherit;font-weight:800;cursor:pointer" onclick="go(\'hc\')">HC autorizado</a>.</div>';
   h+='<div class="foot">* Montos '+(fin?'':'estimados ')+'antes de descuentos, sujetos a cambios y no garantizados. HC tomado de '+HC_SRC+(HC_DIRTY?' + cambios locales sin publicar':'')+'.</div></div>';
@@ -738,7 +742,11 @@ function renderC(){
   h+='<div class="hero"><div class="c-money"><div><div class="l">'+(c.cerrado?'Cerraste '+mesN+' con':'Así vas al '+corteD+' de '+mesN)+'</div><div class="v">'+fmt(c.cobrado)+'<sup>*</sup></div>'+
      (c.cerrado?'':'<div class="s">Estimado al cierre del mes, al ritmo actual: <b>'+fmt(c.cierre)+'</b>*</div>')+(!c.cerrado&&c.pasH<7?'<div class="early">Pocos días de datos: puede cambiar mucho.</div>':'')+'</div>'+
      '<div class="n">* Antes de descuentos. No es un monto oficial ni garantizado.</div></div>';
-  h+='<div class="c-price"><div class="top"><span class="l">Precio por folio'+(c.variosPrecios?' <span style="font-weight:500;color:var(--g5)">(promedio)</span>':'')+'</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">'+(c.variosPrecios?'varía por sucursal · ver tabla por sucursal':'precio normal '+fmt(normal))+(c.especial?' · incluye precio especial':'')+'</div><div class="why">'+
+  if(c.grupo)h+='<div class="c-price"><div class="top"><span class="l">Precio por folio <span style="font-weight:500;color:var(--g5)">(promedio)</span></span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">cada distrito tiene su propio precio</div><div class="why">'+
+     c.partes.map(function(p){return p.error?'<div class="w"><div class="t">'+esc(p.nombre)+'<span>sin HC autorizado</span></div><div class="a z">—</div></div>':
+       '<div class="w"><div class="t">'+esc(p.nombre)+'<span>'+p.proy.asist+' días · '+p.proy.prod.toFixed(1)+' folios al día · '+adj(p.adjAsist)+' / '+adj(p.adjProd)+'</span></div><div class="a '+(p.adjAsist<0?'dn':p.adjProd>0?'up':'z')+'">'+fmt(p.precioTipo)+'</div></div>'}).join('')+
+     '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
+  else h+='<div class="c-price"><div class="top"><span class="l">Precio por folio'+(c.variosPrecios?' <span style="font-weight:500;color:var(--g5)">(promedio)</span>':'')+'</span><span class="v">'+fmt(c.precioTipo)+'</span></div><div class="nrm" style="text-align:right">'+(c.variosPrecios?'varía por sucursal · ver tabla por sucursal':'precio normal '+fmt(normal))+(c.especial?' · incluye precio especial':'')+'</div><div class="why">'+
      '<div class="w"><div class="t">Días trabajados<span>'+aP+' por cuadrilla · meta 25</span></div><div class="a '+(c.adjAsist<0?'dn':'z')+'">'+adj(c.adjAsist)+'</div>'+bar(aP,26,25,c.adjAsist>=0)+'</div>'+
      '<div class="w"><div class="t">Folios al día<span>'+pP.toFixed(1)+' por cuadrilla · meta 3.5</span></div><div class="a '+(c.adjProd>0?'up':'z')+'">'+adj(c.adjProd)+'</div>'+bar(pP,5,3.5,pP>=3.5)+'</div>'+
      '</div><span class="lnk" onclick="openRules()">¿Cómo se calcula? Ver reglas →</span></div></div>';
@@ -747,12 +755,13 @@ function renderC(){
   var vacF=SUC==='ALL'?vac:0;
   var st=[
     {ok:!vac,v:c.activos+' de '+c.hc,t:'Cuadrillas trabajando',s:vac?(vac+' lugar'+(vac>1?'es':'')+' de tu HC autorizado sin cubrir.'):'Tu HC autorizado está completo.'},
-    {ok:c.adjAsist>=0,v:aP+' días',t:'Días por cuadrilla',s:c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla.'},
+    {ok:c.grupo?aP>=25:c.adjAsist>=0,v:aP+' días',t:'Días por cuadrilla',s:(c.grupo||c.adjAsist>=0?'Meta: 25 días por cuadrilla.':'Meta: 25 días completos por cuadrilla.')+(c.grupo?' Se mide por distrito.':'')},
     {ok:c.proy.prod>=3.5,v:pP.toFixed(1)+' folios',t:'Folios al día',s:'Meta: 3.5 folios al día por cuadrilla.'}];
   h+='<div class="blk"><div class="blk-h"><span class="t">Cómo vas contra tu meta</span><span class="s">'+(c.cerrado?'mes completo':'estimado al cierre del mes')+'</span></div><div class="acts3">';
   st.forEach(function(a){h+='<div class="ac'+(a.ok?' ok':' warn')+'"><div class="g">'+(a.ok?'✓ ':'')+a.v+'</div><b>'+a.t+'</b><span>'+a.s+'</span></div>'});
   h+='</div></div>';
-  // 4. por sucursal (tabla tipo dinámica)
+  // 4. por distrito (contratistas agrupados) y por sucursal (tabla tipo dinámica)
+  h+=parteBlock(c);
   h+=sucBlock(c);
   // 5. técnicos
   G.r.sort(function(a,b){return a.d-b.d});G.a.sort(function(a,b){return a.dProj-b.dProj});G.g.sort(function(a,b){return b.prodT-a.prodT});
@@ -794,7 +803,20 @@ function sucBlock(c){
     if(open)g.t.slice().sort(function(a,b){return c.tecs[b].prodT-c.tecs[a].prodT}).forEach(function(i){var t=c.tecs[i];
       h+='<tr class="st" onclick="openTec('+i+')"><td class="nm">'+esc(titleName(t.nombre))+'</td><td class="r"></td><td class="r">'+t.d+'</td><td class="r '+(t.dProj>=24.5?'ok':'bad')+'">'+Math.round(t.dProj)+'</td><td class="r">'+(t.fol+t.fest)+'</td><td class="r '+(t.prodT>=3.5?'ok':'bad')+'">'+t.prodT.toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(t.pago)+'</td>'+(fin?'':'<td class="r">'+fmt(t.pagoProj)+'</td>')+'</tr>'})});
   h+='</tbody><tfoot><tr><td>'+(SUC==='ALL'?'Total':'Total '+esc(sucName(c,SUC)))+'</td><td class="r">'+T.n+'</td><td class="r">'+T.d+'</td><td class="r">'+(T.dp/Math.max(1,T.n)).toFixed(1)+'</td><td class="r">'+n0(T.f)+'</td><td class="r">'+(T.fp/Math.max(1,T.n)/26).toFixed(2)+'</td><td class="r"></td><td class="r">'+fmt(T.p)+'</td>'+(fin?'':'<td class="r">'+fmt(T.pp)+'</td>')+'</tr></tfoot></table></div>';
-  return h+'<div class="how">Días y folios por cuadrilla de cada sucursal se miden sobre las cuadrillas que trabajan ahí; el precio por folio se calcula para todo el contratista.</div></div>';
+  return h+'<div class="how">Días y folios por cuadrilla de cada sucursal se miden sobre las cuadrillas que trabajan ahí; el precio por folio se calcula '+(c.grupo?'por distrito (ver tabla Por distrito).':'para todo el contratista.')+'</div></div>';
+}
+function parteBlock(c){
+  if(!c.grupo)return '';
+  var fin=c.cerrado,n0=function(x){return Math.round(x||0).toLocaleString('en-US')};
+  var h='<div class="blk"><div class="blk-h"><span class="t">Por distrito</span><span class="s">Cada distrito se mide con su HC autorizado y tiene su propio precio</span></div><div class="tw2"><table class="rs"><thead><tr>'+
+    '<th>Distrito</th><th class="r">HC</th><th class="r">Trabajando</th><th class="r">Días / cuadrilla'+(fin?'':' (est.)')+'</th><th class="r">Folios al día'+(fin?'':' (est.)')+'</th><th class="r">Ajuste días</th><th class="r">Ajuste folios</th><th class="r">Precio por folio</th><th class="r">'+(fin?'Monto del mes*':'Monto a la fecha*')+'</th>'+(fin?'':'<th class="r">Estimado al cierre*</th>')+'</tr></thead><tbody>';
+  function adj(n){return n>0?'+$'+n:n<0?'−$'+(-n):'$0'}
+  c.partes.forEach(function(p){
+    h+='<tr><td class="nm">'+esc(p.nombre)+'</td>'+(p.error?'<td class="r bad" colspan="'+(fin?8:9)+'">sin HC autorizado: agrégalo en HC autorizado</td></tr>':
+      '<td class="r">'+p.hc+'</td><td class="r '+(p.activos<p.hc?'bad':'')+'">'+p.activos+'</td><td class="r '+(p.proy.asist>=25?'ok':'bad')+'">'+p.proy.asist+'</td><td class="r '+(p.proy.prod>=3.5?'ok':'bad')+'">'+p.proy.prod.toFixed(1)+'</td>'+
+      '<td class="r">'+adj(p.adjAsist)+'</td><td class="r">'+adj(p.adjProd)+'</td><td class="r"><b>'+fmt(p.precioTipo)+'</b>'+(p.especial?'<span class="esp">especial</span>':'')+'</td><td class="r">'+fmt(p.cobrado)+'</td>'+(fin?'':'<td class="r">'+fmt(p.cierre)+'</td>')+'</tr>')});
+  h+='</tbody><tfoot><tr><td>Total</td><td class="r">'+c.hc+'</td><td class="r">'+c.activos+'</td><td class="r">'+c.proy.asist+'</td><td class="r">'+c.proy.prod.toFixed(1)+'</td><td></td><td></td><td class="r">'+fmt(c.precioTipo)+'</td><td class="r">'+fmt(c.cobrado)+'</td>'+(fin?'':'<td class="r">'+fmt(c.cierre)+'</td>')+'</tr></tfoot></table></div>';
+  return h+'<div class="how">El precio por folio de cada distrito es el de la tabla de su tipo (Tipo A, Tipo B o López Mateos) con el ajuste por días y folios de ese distrito. El total usa el promedio ponderado por folios.</div></div>';
 }
 function openTec(i){
   var c=cur(), t=c.tecs[i], mk=RES.monthKey, y=+mk.slice(0,4), m=+mk.slice(5,7)-1;
@@ -844,14 +866,14 @@ function priceTable(tipo,me){
 }
 var RT='A';
 function openRules(){
-  var c=RES&&cur(); var me=c&&c.proy?{asist:c.proy.asist,prod:Math.round(Math.min(3.8,c.proy.prod)*10)/10}:null;
+  var c=RES&&cur(); var me=c&&c.proy&&!c.grupo?{asist:c.proy.asist,prod:Math.round(Math.min(3.8,c.proy.prod)*10)/10}:null;
   if(c&&c.tipoPrincipal)RT=c.tipoPrincipal;
   var h='<div class="mh"><div><div class="t">Reglas del esquema</div><div class="st">Destajo con póliza · vigente desde septiembre 2026 · fijo por 3 meses</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb"><div class="rules">';
   h+='<div class="rc" style="grid-column:1/-1"><b class="h">1. Tu póliza (tu meta del mes)</b><div class="formula"><div>HC<span>cuadrillas autorizadas</span></div>×<div>3.5<span>folios al día</span></div>×<div>26<span>días</span></div>=<div style="color:var(--qg)">91<span>folios por cuadrilla</span></div></div><p>Se te sigue pagando cada folio. La póliza es tu meta, no un tope. Todo se mide sobre tus cuadrillas <b>autorizadas</b>: si una no trabaja, cuenta como 0 días y 0 folios.</p></div>';
   h+='<div class="rc"><b class="h">2. Lo que sube tu precio</b><ul><li>Por cada <b>0.1 folios al día</b> arriba de 3.5, tu precio sube <b>$20</b>.</li><li>Tener tus cuadrillas autorizadas completas y trabajando.</li></ul></div>';
   h+='<div class="rc"><b class="h">3. Lo que baja tu precio</b><ul><li>Meta: <b>25 días</b> por cuadrilla.</li><li>Con 24 días: <b>−$15</b>. Con 23 o menos: <b>−$30</b>.</li><li>Lugares vacíos cuentan como 0 días.</li></ul></div>';
   h+='<div class="rc" style="grid-column:1/-1"><b class="h">4. Tu tabla de precio por folio</b><div class="tabs">'+['A','B','LM'].map(function(t){return '<button class="'+(t===RT?'on':'')+'" onclick="RT=\''+t+'\';openRules()">'+(t==='LM'?'López Mateos':'Tipo '+t)+'</button>'}).join('')+'</div>'+
-     '<p style="font-size:13px;color:var(--g5)">Tipo A: GDL Barranca, Estadio y Primavera · Tipo B: resto de distritos · López Mateos: tabla propia.'+(me&&RT===c.tipoPrincipal?' <b style="color:var(--amb-dk)">Recuadro amarillo = donde vas este mes.</b>':'')+'</p>'+priceTable(RT,RT===(c&&c.tipoPrincipal)?me:null)+'</div>';
+     '<p style="font-size:13px;color:var(--g5)">Tipo A: GDL Barranca, Estadio, Primavera, Tepic y Colima · Tipo B: resto de distritos · López Mateos: tabla propia.'+(me&&RT===c.tipoPrincipal?' <b style="color:var(--amb-dk)">Recuadro amarillo = donde vas este mes.</b>':'')+'</p>'+priceTable(RT,RT===(c&&c.tipoPrincipal)?me:null)+'</div>';
   h+='<div class="rc"><b class="h">5. Soporte y recolección</b><ul><li>Soporte: <b>$40 menos</b> que tu precio del mes.</li><li>Recolección: siempre <b>$150</b>.</li></ul></div>';
   h+='<div class="rc"><b class="h">6. Día festivo</b><ul><li>Cada folio se paga a tu precio, sin descuento de soporte.</li><li>Con <b>3 folios o más</b> ese día: bono de <b>$350</b>.</li></ul></div>';
   h+='<div class="rc" style="grid-column:1/-1"><b class="h">7. Importante</b><ul><li>El esquema queda fijo por <b>3 meses</b> y se revisa cada trimestre.</li><li>Esta pantalla es un <b>pronóstico</b>: usa lo que llevas en el mes y supone que sigues al mismo ritmo.</li><li>Los montos son <b>antes de descuentos</b> (material, uniformes, préstamos, arrendamiento, etc.), no son oficiales ni garantizados. Tu pago final te lo confirma QiORA Conecta en tu estado de cuenta.</li></ul></div>';
