@@ -416,13 +416,13 @@ table.ecr td.tc{font-weight:800}
 </div>
 
 <div id="ec" hidden>
-  <div id="ecLoader" class="wrap"><label id="ecDrop"><img src="" data-logo alt="QiORA Conecta"><b>Arrastra aquí el archivo de comisiones del mes</b><span>El Excel "COMISIONES CONTRATISTA …" con el cierre del nuevo esquema · se lee solo en tu computadora, no se sube a ningún lado</span>
-    <input id="ecFileIn" type="file" accept=".xlsx,.xlsm" hidden><div id="ecstatus"></div></label></div>
+  <div id="ecLoader" class="wrap"><label id="ecDrop"><img src="" data-logo alt="QiORA Conecta"><b>Arrastra aquí los archivos de comisiones del mes</b><span>Uno o varios Excel "COMISIONES CONTRATISTA …" con el cierre del nuevo esquema · se lee solo en tu computadora, no se sube a ningún lado</span>
+    <input id="ecFileIn" type="file" accept=".xlsx,.xlsm" multiple hidden><div id="ecstatus"></div></label></div>
   <div id="ecApp" hidden>
     <aside class="side">
       <div class="lg"><img src="" data-logo alt="QiORA Conecta"><div class="sub">Estado de cuenta · <span id="ecmes"></span></div></div>
       <div class="lst"><div class="ttl">Contratistas</div><div id="eclist"></div></div>
-      <div class="ft"><button id="ecDl1" style="background:var(--ink);margin-bottom:8px">⬇ Descargar este contratista</button><button id="ecDlAll" style="background:#fff;color:var(--ink);border:1px solid var(--g2)">⬇ Descargar todos (.zip)</button><span class="ch" id="ecChg">Cargar otro archivo</span></div>
+      <div class="ft"><button id="ecDl1" style="background:var(--ink);margin-bottom:8px">⬇ Descargar este contratista</button><button id="ecDlAll" style="background:#fff;color:var(--ink);border:1px solid var(--g2)">⬇ Descargar todos (.zip)</button><span class="ch" id="ecAdd">+ Agregar otro archivo</span><span class="ch" id="ecChg">Quitar todos y empezar de nuevo</span></div>
     </aside>
     <main class="main"><div id="ecview"></div></main>
   </div>

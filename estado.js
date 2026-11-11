@@ -225,6 +225,7 @@ function ecDraw() {
   EC.contratistas.forEach(function (x, i) {
     var bad = ecChecks(x).length;
     h += '<button class="ci' + (i === ECI ? ' on' : '') + '" onclick="ecPick(' + i + ')"><div class="cn">' + esc(x.nombre) + (bad ? ' <span class="dirty">revisar</span>' : '') + '</div><div class="cm"><span>' + ecF(x.total) + ' a facturar</span></div></button>'; });
+  if (EC.archivos.length > 1 || EC.vacios.length) h += '<div class="ecom">Archivos: ' + EC.archivos.map(esc).join(' · ') + (EC.vacios.length ? '<br>Sin datos del formato nuevo: ' + EC.vacios.map(esc).join(', ') : '') + '</div>';
   if (EC.omitidas.length) h += '<div class="ecom">No se incluyeron: ' + EC.omitidas.map(function (s) { return '<b>' + esc(s.hoja.trim()) + '</b> (' + s.por + ')'; }).join(', ') + '</div>';
   document.getElementById('eclist').innerHTML = h;
   document.getElementById('ecmes').textContent = ecMesTxt(c);
@@ -233,17 +234,31 @@ function ecDraw() {
   if (c.cuad.length && !Object.keys(EC_NAMES).length) warn.push('Para ver nombres de técnicos en lugar del usuario, carga también el archivo de bonos en la pestaña Avance de póliza.');
   document.getElementById('ecview').innerHTML = (warn.length ? '<div class="ecwarn">' + warn.join('<br>') + '</div>' : '') + renderEC(c);
 }
-function ecLoad(f) {
-  var st = document.getElementById('ecstatus'); st.textContent = 'Abriendo ' + f.name + '…';
-  f.arrayBuffer().then(function (buf) {
-    try {
-      var R = ecParse(XLSX.read(buf, { type: 'array', cellDates: true }));
-      if (!R.contratistas.length) throw new Error('No encontré hojas con la tabla por distrito ni la tabla de cuadrillas del nuevo esquema.');
-      EC = R; ECI = 0; ECSUC = 'ALL'; ECOPEN = {};
+// Se pueden subir varios archivos a la vez (o ir agregando): los contratistas se juntan en la lista.
+// Si un contratista viene en dos archivos, se queda el del último archivo cargado.
+function ecLoad(files) {
+  files = Array.prototype.slice.call(files || []); if (!files.length) return;
+  var st = document.getElementById('ecstatus'); st.textContent = 'Abriendo ' + files.map(function (f) { return f.name; }).join(', ') + '…';
+  Promise.all(files.map(function (f) { return f.arrayBuffer().then(function (buf) { return { f: f, R: ecParse(XLSX.read(buf, { type: 'array', cellDates: true })) }; }); }))
+    .then(function (res) {
+      var L = EC ? EC.contratistas.slice() : [], om = EC ? EC.omitidas.slice() : [], arch = EC ? EC.archivos.slice() : [], vacios = [];
+      res.forEach(function (x) {
+        if (!x.R.contratistas.length) { vacios.push(x.f.name); return; }
+        arch.push(x.f.name);
+        x.R.contratistas.forEach(function (c) { c.archivo = x.f.name;
+          L = L.filter(function (o) { return ecU(o.nombre) !== ecU(c.nombre); }); L.push(c); });
+        om = om.concat(x.R.omitidas);
+      });
+      if (!L.length) throw new Error('No encontré hojas con la tabla por distrito ni la tabla de cuadrillas del nuevo esquema' + (vacios.length ? ' en ' + vacios.join(', ') : '') + '.');
+      var vistos = {}; om = om.filter(function (s) { var k = ecU(s.hoja);
+        if (vistos[k] || L.some(function (c) { return ecU(c.nombre) === k; })) return false; return (vistos[k] = true); });
+      L.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
+      var cur = EC && EC.contratistas[ECI] ? ecU(EC.contratistas[ECI].nombre) : null;
+      EC = { contratistas: L, omitidas: om, archivos: arch, vacios: vacios };
+      ECI = Math.max(0, cur ? L.findIndex(function (c) { return ecU(c.nombre) === cur; }) : 0); ECSUC = 'ALL'; ECOPEN = {};
       document.getElementById('ecLoader').hidden = true; document.getElementById('ecApp').hidden = false;
       ecDraw();
-    } catch (e) { st.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; }
-  });
+    }).catch(function (e) { st.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; });
 }
 function ecFile(c) { return 'Estado_de_cuenta_' + slug(c.nombre) + '_' + (c.fin || c.inicio || '').slice(0, 7) + '.html'; }
 function ecExport(c) {
@@ -277,8 +292,9 @@ function setTab(t) {
   var d = document.getElementById('ecDrop'), f = document.getElementById('ecFileIn');
   ['dragenter', 'dragover'].forEach(function (e) { d.addEventListener(e, function (ev) { ev.preventDefault(); d.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (e) { d.addEventListener(e, function (ev) { ev.preventDefault(); d.classList.remove('over'); }); });
-  d.addEventListener('drop', function (ev) { if (ev.dataTransfer.files[0]) ecLoad(ev.dataTransfer.files[0]); });
-  f.addEventListener('change', function () { if (f.files[0]) ecLoad(f.files[0]); });
+  d.addEventListener('drop', function (ev) { ecLoad(ev.dataTransfer.files); });
+  f.addEventListener('change', function () { ecLoad(f.files); f.value = ''; });
+  document.getElementById('ecAdd').onclick = function () { f.click(); };
   document.getElementById('ecDl1').onclick = ecDownloadOne; document.getElementById('ecDlAll').onclick = ecDownloadAll;
   document.getElementById('ecChg').onclick = function () { EC = null; document.getElementById('ecApp').hidden = true; document.getElementById('ecLoader').hidden = false; document.getElementById('ecstatus').textContent = ''; f.value = ''; };
 })();

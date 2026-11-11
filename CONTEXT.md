@@ -62,6 +62,7 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 - Hojas sin tabla por distrito ni cuadrillas nuevas (formato estrellas) se omiten y se listan. JP Valencia entra solo con tabla por distrito.
 - Revisiones internas (solo en pantalla, etiqueta "revisar"): ingreso + conceptos ≠ subtotal, subtotal + IVA ≠ total, suma de cuadrillas ≠ ingreso bruto. Oct-26: Agustín Valencia (rally 3,250 no sumado; cuadrillas 204,340 vs ingreso 141,490).
 - Nombres de técnicos: del archivo de bonos si se cargó en la misma sesión; si no, usuario FFM.
+- Se pueden subir varios archivos a la vez o ir agregando ("+ Agregar otro archivo"); todos los contratistas quedan en el sidebar. Si un contratista viene en dos archivos, gana el último cargado.
 - Descargas: HTML por contratista (`Estado_de_cuenta_<nombre>_<YYYY-MM>.html`, imprimible) y .zip.
 
 ## Pantallas
