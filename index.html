@@ -738,7 +738,7 @@ function renderAct(){
   var h='<div class="pg wide"><div class="pg-h"><div class="ey">Configuración</div><h1>Técnicos activos por distrito</h1>'+
     '<div class="meta"><span>Técnicos distintos (por nombre) con al menos un folio en el mes. Si el número real es otro, escríbelo encima; borra la celda para volver al calculado.</span></div></div>';
   h+='<div class="hcbar">'+(ACT_DIRTY?'<span class="dirty big">Tienes cambios sin publicar: solo se ven en este navegador.</span>':'<span class="okk">Al día con activos.json</span>')+
-     '<span class="sp"></span><button class="b2" onclick="dlAct()">⬇ Descargar activos.json</button>'+(ACT_DIRTY?'<button class="b2" onclick="discardAct()">Descartar cambios</button>':'')+'<button class="b1" onclick="publishHC(\'act\')"'+(ACT_DIRTY?'':' disabled')+'>Publicar en GitHub</button></div>';
+     '<span class="sp"></span><button class="b2" onclick="pdfAct()">⬇ Descargar PDF</button><button class="b2" onclick="dlAct()">⬇ Descargar activos.json</button>'+(ACT_DIRTY?'<button class="b2" onclick="discardAct()">Descartar cambios</button>':'')+'<button class="b1" onclick="publishHC(\'act\')"'+(ACT_DIRTY?'':' disabled')+'>Publicar en GitHub</button></div>';
   h+='<div class="tw2"><table class="hcm actm"><thead><tr><th>Contratista · distrito</th>'+ms.map(th).join('')+'</tr></thead><tbody>';
   var last=null;
   rows.forEach(function(r){
@@ -758,6 +758,33 @@ function editAct(el){
   if(!Object.keys(ACT_OV[k]).length)delete ACT_OV[k];
   ACT_DIRTY=true; try{localStorage.setItem('actLocal',JSON.stringify(ACT_OV))}catch(e){}
   var y=window.scrollY;setTimeout(function(){renderAct();window.scrollTo(0,y)},0);
+}
+function loadJs(src){return new Promise(function(ok,ko){var e=document.createElement('script');e.src=src;e.onload=ok;e.onerror=function(){ko(new Error('No se pudo cargar '+src))};document.head.appendChild(e)})}
+function pdfAct(){
+  var p=window.jspdf?Promise.resolve():loadJs('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js').then(function(){return loadJs('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')});
+  p.then(function(){
+    var rows=actCalc(), ms={};DATA.months.forEach(function(k){ms[k]=1});Object.keys(ACT_OV).forEach(function(k){ms[k]=1});ms=Object.keys(ms).sort();
+    var G={},C={};rows.forEach(function(r){ms.forEach(function(k){var v=actVal(r,k).v;G[k]=(G[k]||0)+v;C[r.id]=C[r.id]||{};C[r.id][k]=(C[r.id][k]||0)+v})});
+    var body=[],last=null;
+    rows.forEach(function(r){
+      if(r.id!==last){last=r.id;body.push({t:'c',cells:[r.ct].concat(ms.map(function(k){return C[r.id][k]||'–'}))})}
+      body.push({t:'d',cells:['    '+r.name+'  ·  '+r.d].concat(ms.map(function(k){return actVal(r,k).v||'–'}))})});
+    body.push({t:'t',cells:['Total'].concat(ms.map(function(k){return G[k]||'–'}))});
+    var doc=new jspdf.jsPDF({orientation:ms.length>6?'landscape':'portrait',unit:'pt',format:'letter'});
+    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('Técnicos activos por distrito',40,46);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(110);
+    doc.text('QiORA Conecta · técnicos distintos con al menos un folio en el mes · generado '+new Date().toLocaleDateString('es-MX'),40,62);
+    doc.autoTable({startY:76,head:[['Contratista · distrito'].concat(ms.map(mesCorto))],body:body.map(function(b){return b.cells}),
+      theme:'plain',styles:{fontSize:9,cellPadding:{top:5,bottom:5,left:6,right:6},textColor:30},
+      headStyles:{fillColor:[31,15,77],textColor:255,fontStyle:'bold',halign:'center'},
+      columnStyles:Object.assign({0:{halign:'left'}},ms.reduce(function(o,k,i){o[i+1]={halign:'center',cellWidth:44};return o},{})),
+      didParseCell:function(d){if(d.section==='head'&&d.column.index===0)d.cell.styles.halign='left';if(d.section!=='body')return;var t=body[d.row.index].t;
+        if(t==='c'){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[243,240,251]}
+        if(t==='t'){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[31,15,77];d.cell.styles.textColor=255}
+        if(t==='d')d.cell.styles.lineWidth={bottom:.5};d.cell.styles.lineColor=[230,230,230]},
+      margin:{left:40,right:40}});
+    doc.save('Activos_por_distrito_'+(RES?RES.monthKey:'')+'.pdf');
+  }).catch(function(e){alert(e.message)});
 }
 function actJSON(){var o={};Object.keys(ACT_OV).sort().forEach(function(k){o[k]=ACT_OV[k]});return JSON.stringify(o,null,2)+'\n'}
 function dlAct(){saveBlob(new Blob([actJSON()],{type:'application/json'}),'activos.json')}
