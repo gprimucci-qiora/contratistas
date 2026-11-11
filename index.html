@@ -600,6 +600,7 @@ function render(){
   if(VIEW==='res')return renderRes();
   if(VIEW==='hc')return renderHC();
   if(VIEW==='pb')return renderPB();
+  if(VIEW==='act')return renderAct();
   renderC();
 }
 function go(v){VIEW=v;render()}
@@ -607,7 +608,8 @@ function go(v){VIEW=v;render()}
 function navTop(){
   return '<button class="nv'+(VIEW==='res'?' on':'')+'" onclick="go(\'res\')">▦ Resumen del mes</button>'+
          '<button class="nv'+(VIEW==='hc'?' on':'')+'" onclick="go(\'hc\')">✎ HC autorizado'+(HC_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>'+
-         '<button class="nv'+(VIEW==='pb'?' on':'')+'" onclick="go(\'pb\')">$ Precio base por distrito'+(PB_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>';
+         '<button class="nv'+(VIEW==='pb'?' on':'')+'" onclick="go(\'pb\')">$ Precio base por distrito'+(PB_DIRTY?' <span class="dirty">sin publicar</span>':'')+'</button>'+
+         '<button class="nv'+(VIEW==='act'?' on':'')+'" onclick="go(\'act\')">👷 Activos por distrito</button>';
 }
 
 var ALERTA={sinAct:3, prodAlta:6}; // días hábiles seguidos sin folios · folios por día trabajado
@@ -702,6 +704,32 @@ function pbRows(){ // contratista × distrito según el archivo cargado
     if(!R[k])R[k]={k:k,ct:ct,d:d,name:String(t.sucursal).replace(/^.*?INT-[A-Z]+\s*/,'').toLowerCase().replace(/(^|\s)(\S)/g,function(a,b,c){return b+c.toUpperCase()}).replace(/\bGdl\b/g,'GDL'),n:0};R[k].n++});
   var order=Calc.CONTRATISTAS.map(function(x){return x.id});
   return Object.keys(R).map(function(k){return R[k]}).sort(function(a,b){return order.indexOf(a.ct.id)-order.indexOf(b.ct.id)||a.name.localeCompare(b.name)});
+}
+function actNorm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').replace(/\s+/g,' ').trim()}
+function renderAct(){ // técnicos activos (nombre único con al menos un folio en el mes) por contratista × distrito
+  sidebar();
+  var cur=RES?RES.monthKey:'', ms=DATA.months, R={}, T={}, G={};
+  DATA.rows.forEach(function(r){var t=DATA.tec[r[0]];if(!t)return;var c=String(t.contratista||'').trim().toUpperCase();if(!c||c==='INTERNO')return;
+    var m=String(t.sucursal).match(/INT-([A-Z]+)/),d=m?m[1]:'?',ct=Calc.matchC(c,d),id=ct?ct.id:c,k=id+'|'+d,mk=r[1].slice(0,7),n=actNorm(t.nombre||r[0]);
+    if(!R[k])R[k]={k:k,id:id,ct:ct?ct.nombre:titleName(c),d:d,name:m?String(t.sucursal).replace(/^.*?INT-[A-Z]+\s*/,'').toLowerCase().replace(/(^|\s)(\S)/g,function(a,b,c){return b+c.toUpperCase()}).replace(/\bGdl\b/g,'GDL'):t.sucursal,m:{}};
+    (R[k].m[mk]=R[k].m[mk]||{})[n]=1; ((T[id]=T[id]||{})[mk]=T[id][mk]||{})[n]=1; (G[mk]=G[mk]||{})[id+'|'+n]=1});
+  var order=Calc.CONTRATISTAS.map(function(x){return x.id}),oi=function(id){var i=order.indexOf(id);return i<0?99:i};
+  var rows=Object.keys(R).map(function(k){return R[k]}).sort(function(a,b){return oi(a.id)-oi(b.id)||a.ct.localeCompare(b.ct)||a.name.localeCompare(b.name)});
+  function n(o){return o?Object.keys(o).length:0}
+  function cell(v,k,st){return '<td class="'+(k===cur?'cur':'')+'" style="padding:8px 4px;'+(st||'')+'">'+(v||'<span style="color:var(--g3)">–</span>')+'</td>'}
+  var h='<div class="pg wide"><div class="pg-h"><div class="ey">Configuración</div><h1>Técnicos activos por distrito</h1>'+
+    '<div class="meta"><span>Técnicos distintos con al menos un folio en el mes. Si un técnico tiene más de un usuario FFM, cuenta una sola vez (por nombre). Gris = HC autorizado del contratista.</span></div></div>';
+  h+='<div class="tw2"><table class="hcm"><thead><tr><th>Contratista · distrito</th>';
+  ms.forEach(function(k){h+='<th class="'+(k===cur?'cur':'')+'">'+mesCorto(k)+'</th>'});h+='</tr></thead><tbody>';
+  h+='<tr><td class="nm" style="color:var(--ink);font-weight:800;background:#f3f0fb">Total</td>';ms.forEach(function(k){h+=cell(n(G[k]),k,'font-weight:800;background:#f3f0fb')});h+='</tr>';
+  var last=null;
+  rows.forEach(function(r){
+    if(r.id!==last){last=r.id;h+='<tr><td class="nm" style="color:var(--ink);font-weight:800;background:#fafafa">'+esc(r.ct)+'</td>';
+      ms.forEach(function(k){var hc=Calc.hcFor(r.id,k);h+=cell(n(T[r.id][k])+(hc!=null?' <span style="color:var(--g4);font-weight:500">/ '+hc+'</span>':''),k,'font-weight:800;background:#fafafa')});h+='</tr>'}
+    h+='<tr><td class="nm" style="padding-left:30px">'+esc(r.name)+' <span style="color:var(--g4);font-weight:500">· '+r.d+'</span></td>';
+    ms.forEach(function(k){h+=cell(n(r.m[k]),k)});h+='</tr>'});
+  h+='</tbody></table></div><div class="foot">Según el archivo cargado. Un técnico que se cambió de distrito en el mes cuenta en cada distrito, pero una sola vez en el total del contratista.</div></div>';
+  $('view').innerHTML=h;
 }
 function pbDefault(d){var tp=Calc.tipoDist(d);return Calc.P.base.A+(tp==='LM'?50:tp==='B'?-40:0)}
 function renderPB(){
