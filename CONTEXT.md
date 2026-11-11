@@ -54,6 +54,15 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 - Pantalla **"$ Precio base por distrito"**: matriz contratista·distrito × mes (filas según el archivo cargado), cambios en localStorage (`pbLocal`), publicar a GitHub igual que HC.
 - Si un contratista tiene precio especial, su "precio por folio" es el promedio ponderado por folios y la tabla por sucursal marca "especial" (también en el HTML descargado).
 
+## Estado de cuenta (pestaña 2, `estado.js`)
+- La página tiene dos pestañas arriba: **Avance de póliza** (archivo de bonos) y **Estado de cuenta** (cierre del mes).
+- Entrada: Excel `COMISIONES CONTRATISTA <MES>` con el formato nuevo: una hoja por contratista o por distrito (Marco Anaya: GDL, Tepic, Colima, León). Cada hoja trae encabezado (fechas, cuadrillas, asistencias, OS, pago total), **ADICIONALES Y DESCUENTOS** hasta "Total", Subtotal a facturar, IVA y retenciones, Total, y la tabla de cuadrillas (`Usuario para pago`, `Precio base`, `Precio Soporte`, folios, soporte, recolección, festivo, `$$$`, Total).
+- Hojas del mismo nombre de contratista (celda junto a "ESTADO DE CUENTA CONTRATISTA") se juntan en un estado con columnas por distrito. Hojas con formato anterior (estrellas) o sin cuadrillas se omiten y se listan.
+- Montos se toman **tal cual del archivo** (fuente oficial). El detalle de ajustes del precio (días por cuadrilla, folios al día, HC) se reconstruye con `hc.json`/`precios.json`; si no reproduce el precio del archivo, se muestra solo el precio y un aviso.
+- El archivo no trae nombres: si en la misma sesión se cargó el archivo de bonos, se usan los nombres de la hoja Tecnicos; si no, el usuario FFM.
+- Descargas: HTML por contratista (`Estado_de_cuenta_<nombre>_<YYYY-MM>.html`, solo sus datos, filtro por sucursal, imprimible) y .zip de todos.
+- Validado oct-26 Marco Anaya: totales por distrito iguales al Excel (Tepic 612,140 · León 499,410 · Colima 350,275 · GDL 201,997 · total 1,663,821).
+
 ## Pantallas
 1. **Carga**: arrastrar Excel. Lectura en Web Worker embebido (blob) con fallback al hilo principal; ~6 s para 52 MB.
 2. **Resumen del mes** (landing): costo estimado del mes, costo a la fecha, precio promedio ponderado, días/cuadrilla, folios/día, folios vs póliza, tabla por contratista con totales.
@@ -65,6 +74,7 @@ Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip
 
 ## Archivos
 - `index.html` — UI, lector Excel embebido (`#wsrc`), vistas, exportación.
+- `estado.js` — pestaña Estado de cuenta (lector del Excel de comisiones, vista y exportación).
 - `calc.js` — motor de cálculo, CONTRATISTAS, HC_MES por defecto, FESTIVOS.
 - `hc.json` — HC autorizado por mes (fuente en Pages).
 - CDNs: SheetJS 0.18.5, JSZip 3.10.1 (cdnjs), Google Fonts.
@@ -77,6 +87,5 @@ Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip
 - Omar (18 de 17) y Esmeralda (11 de 10) traen más cuadrillas que HC en octubre: ¿correcto o cambió el HC?
 - Octubre tiene 27 días hábiles lun–sáb; productividad se mide sobre 26. Confirmar criterio.
 - Pronóstico: ritmo de todo el mes vs más peso a última semana (no decidido; hoy = todo el mes).
-- Estado de cuenta oficial de cierre de mes del nuevo esquema (segundo proyecto, mismo motor).
 - Logo en alta resolución/SVG (hoy recorte de PNG de la hoja de marca).
 - Hallazgos del Excel de cálculo de sep-2026 (columna "Real" desalineada en Glosario, recolecciones en festivo no pagadas, fila Total hasta 162, flotantes sin ROUND) — ver memoria del proyecto.
