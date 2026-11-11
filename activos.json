@@ -3,12 +3,13 @@
     "MA_TEP|TEP": 22,
     "MA_GDL|GLM": 1,
     "MA_LON|LON": 14,
-    "OMAR|GLM": 0
+    "ELI|GES": 5,
+    "ORT|VRZ": 10
   },
   "2026-11": {
     "MA_COL|COL": 9,
     "MA_LON|LON": 15,
     "MA_TEP|TEP": 18,
-    "OMAR|GLM": 1
+    "ELI|GES": 5
   }
 }
