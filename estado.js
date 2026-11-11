@@ -54,7 +54,7 @@ function ecParseSheet(rows, sheet) {
   S.dif = Math.round(sumT - S.pago);
   // Ajuste del precio: con el HC autorizado del mes se reproduce el precio del archivo (días por cuadrilla y folios al día)
   S.fechas.sort(); S.inicio = S.fechas[0] || ''; S.fin = S.fechas[S.fechas.length - 1] || '';
-  var mk = (S.inicio || '').slice(0, 7), ent = Calc.matchC(S.cuad[0].ctr || S.nombre, S.cuad[0].dist);
+  var mk = (S.inicio || '').slice(0, 7), ent = Calc.matchC(S.cuad[0].ctr, S.cuad[0].dist) || Calc.matchC(S.nombre, S.cuad[0].dist) || Calc.matchC(sheet, S.cuad[0].dist);
   S.parteNombre = ent && ent.corto ? ent.corto : titleName(S.hoja);
   var hc = ent && mk ? Calc.hcFor(ent.id, mk) : null;
   if (hc) {
