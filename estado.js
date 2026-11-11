@@ -143,11 +143,11 @@ function ecResultados(c) {
   function row(lbl, get, cls) { var vals = K.map(get), tot = vals.reduce(function (a, x) { return a + x; }, 0);
     return '<tr class="' + (cls || '') + '"><td class="nm">' + lbl + '</td>' + vals.map(function (x) { return '<td class="r' + (x < -0.5 && !cls ? ' neg' : '') + '">' + ecDash(x) + '</td>'; }).join('') +
       (multi ? '<td class="r tc' + (tot < -0.5 && !cls ? ' neg' : '') + '">' + ecDash(tot) + '</td>' : '') + '</tr>'; }
-  var b = row('Ingreso bruto<small>pago por folios del mes</small>', function (cl) { return cl.ingreso; }, 'sub'), n = 0;
+  var b = row('Ingreso bruto', function (cl) { return cl.ingreso; }, 'sub'), n = 0;
   con.forEach(function (x) { if (K.every(function (cl) { return Math.round(v(cl, x.k)) === 0; })) return; n++;
     b += row(esc(x.t.charAt(0).toUpperCase() + x.t.slice(1)), function (cl) { return v(cl, x.k); }); });
   if (!n) b += '<tr><td class="nm" colspan="' + (K.length + (multi ? 2 : 1)) + '"><span class="z">Sin rally, adicionales ni descuentos este mes</span></td></tr>';
-  b += row('Total de descuentos y adicionales', function (cl) { return cl.descTot; }, 'sub') +
+  b += row('Total descuentos y adicionales', function (cl) { return cl.descTot; }, 'sub') +
     row('Subtotal a facturar', function (cl) { return cl.sub; }, 'sub') +
     row('IVA y retenciones', function (cl) { return cl.iva; }) +
     row('Total a facturar', function (cl) { return cl.total; }, 'grand');
@@ -179,8 +179,8 @@ function ecDet(c) {
   var h = '';
   if (O.length > 1) h += '<div class="sucf"><button class="' + (ECSUC === 'ALL' ? 'on' : '') + '" onclick="ecSetSuc(\'ALL\')">Todas<i>' + all.length + '</i></button>' +
     O.map(function (k) { return '<button class="' + (ECSUC === k ? 'on' : '') + '" onclick="ecSetSuc(\'' + k + '\')">' + esc(ecSuc(D[k].suc)) + '<i>' + D[k].t.length + '</i></button>'; }).join('') + '</div>';
-  h += '<div class="tw2"><table class="rs sucT ecd"><thead><tr><th>' + (O.length > 1 ? 'Sucursal / técnico' : 'Técnico') + '</th><th class="r">Días trabajados</th><th class="r">Folios</th><th class="r">Folios al día</th><th class="r">Soporte</th><th class="r">Recolección</th><th class="r">Otros folios</th>' +
-    (fest ? '<th class="r">Día festivo</th>' : '') + '<th class="r">Precio por folio</th><th class="r">Pago</th></tr></thead><tbody>';
+  h += '<div class="tw2"><table class="rs sucT ecd"><thead><tr><th>' + (O.length > 1 ? 'Sucursal / técnico' : 'Técnico') + '</th><th class="r">Días</th><th class="r">Folios</th><th class="r">Folios/día</th><th class="r">Soporte</th><th class="r">Recolección</th><th class="r">Otros</th>' +
+    (fest ? '<th class="r">Día festivo</th>' : '') + '<th class="r">Precio</th><th class="r">Pago</th></tr></thead><tbody>';
   var T = { n: 0, d: 0, fol: 0, sop: 0, reco: 0, otras: 0, fe: 0, tot: 0 };
   function nn(x) { return (x || 0).toLocaleString('en-US'); }
   function cells(x, pr) { return '<td class="r">' + nn(x.d) + '</td><td class="r">' + nn(x.fol) + '</td><td class="r">' + (x.pd != null ? x.pd : '') + '</td><td class="r">' + nn(x.sop) + '</td><td class="r">' + nn(x.reco) + '</td><td class="r">' + nn(x.otras) + '</td>' +
@@ -196,7 +196,7 @@ function ecDet(c) {
       h += '<tr class="' + (O.length > 1 ? 'st' : '') + '"><td class="nm">' + esc(ecName(t.u)) + (ecName(t.u) !== t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</td>' + cells(x, '$' + t.p) + '</tr>'; });
   });
   h += '</tbody><tfoot><tr><td>' + (ECSUC === 'ALL' ? 'Total' : 'Total ' + esc(ecSuc(D[ECSUC].suc))) + ' <span class="z">· ' + T.n + ' cuadrillas</span></td>' + cells(T, '') + '</tr></tfoot></table></div>';
-  return h + '<div class="how">Folios al día = folios del técnico ÷ 26.</div>';
+  return h + '<div class="how">Días = días trabajados · Folios/día = folios del técnico ÷ 26 · Otros = folios que no son soporte ni recolección · Precio = precio por folio.</div>';
 }
 
 function renderEC(c) {
