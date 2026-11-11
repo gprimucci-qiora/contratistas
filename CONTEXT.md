@@ -56,12 +56,13 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 
 ## Estado de cuenta (pestaña 2, `estado.js`)
 - La página tiene dos pestañas arriba: **Avance de póliza** (archivo de bonos) y **Estado de cuenta** (cierre del mes).
-- Entrada: Excel `COMISIONES CONTRATISTA <MES>` con el formato nuevo: una hoja por contratista o por distrito (Marco Anaya: GDL, Tepic, Colima, León). Cada hoja trae encabezado (fechas, cuadrillas, asistencias, OS, pago total), **ADICIONALES Y DESCUENTOS** hasta "Total", Subtotal a facturar, IVA y retenciones, Total, y la tabla de cuadrillas (`Usuario para pago`, `Precio base`, `Precio Soporte`, folios, soporte, recolección, festivo, `$$$`, Total).
-- Hojas del mismo nombre de contratista (celda junto a "ESTADO DE CUENTA CONTRATISTA") se juntan en un estado con columnas por distrito. Hojas con formato anterior (estrellas) o sin cuadrillas se omiten y se listan.
-- Montos se toman **tal cual del archivo** (fuente oficial). El detalle de ajustes del precio (días por cuadrilla, folios al día, HC) se reconstruye con `hc.json`/`precios.json`; si no reproduce el precio del archivo, se muestra solo el precio y un aviso.
-- El archivo no trae nombres: si en la misma sesión se cargó el archivo de bonos, se usan los nombres de la hoja Tecnicos; si no, el usuario FFM.
-- Descargas: HTML por contratista (`Estado_de_cuenta_<nombre>_<YYYY-MM>.html`, solo sus datos, filtro por sucursal, imprimible) y .zip de todos.
-- Validado oct-26 Marco Anaya: totales por distrito iguales al Excel (Tepic 612,140 · León 499,410 · Colima 350,275 · GDL 201,997 · total 1,663,821).
+- **Solo visualiza, no recalcula** (decisión de Giacomo 2026-11-11): el Excel `COMISIONES CONTRATISTA <MES> CIERRE` trae ajustes manuales, así que los montos se muestran tal cual.
+- De cada hoja se lee: (1) la **tabla por distrito** a la derecha del resumen (empieza en "Ingreso Bruto"; encabezados de distrito en la fila de arriba; conceptos como rally, pendientes, prontos pagos, material, arrendamiento; "Total de descuento y ADD", Subtotal, IVA y retenciones, Total; se omite "Pago promedio por OS"); (2) la tabla de cuadrillas del nuevo esquema (`Usuario para pago`, `Precio base`…) para precio por folio y detalle por cuadrilla.
+- Hojas con el mismo nombre de contratista se juntan (Marco Anaya: la hoja GDL trae la tabla de todos sus distritos; Tepic/Colima/León aportan cuadrillas). Hoja sin tabla por distrito y no cubierta por otra: usa su resumen de la izquierda. Columnas y conceptos en cero se ocultan.
+- Hojas sin tabla por distrito ni cuadrillas nuevas (formato estrellas) se omiten y se listan. JP Valencia entra solo con tabla por distrito.
+- Revisiones internas (solo en pantalla, etiqueta "revisar"): ingreso + conceptos ≠ subtotal, subtotal + IVA ≠ total, suma de cuadrillas ≠ ingreso bruto. Oct-26: Agustín Valencia (rally 3,250 no sumado; cuadrillas 204,340 vs ingreso 141,490).
+- Nombres de técnicos: del archivo de bonos si se cargó en la misma sesión; si no, usuario FFM.
+- Descargas: HTML por contratista (`Estado_de_cuenta_<nombre>_<YYYY-MM>.html`, imprimible) y .zip.
 
 ## Pantallas
 1. **Carga**: arrastrar Excel. Lectura en Web Worker embebido (blob) con fallback al hilo principal; ~6 s para 52 MB.

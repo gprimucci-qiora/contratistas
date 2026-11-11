@@ -1,7 +1,9 @@
 // ===== Estado de cuenta de cierre de mes (nuevo esquema) =====
-// Lee el archivo "COMISIONES CONTRATISTA <MES>": una hoja por contratista (o por distrito, como Marco Anaya),
-// con la tabla de cuadrillas del nuevo esquema (Usuario para pago, Precio base, Soporte, Recolección…) y los
-// adicionales y descuentos. Hojas con el formato anterior (estrellas) o sin tabla se omiten.
+// Solo VISUALIZA el archivo "COMISIONES CONTRATISTA <MES> CIERRE": no recalcula nada, porque ahí se ajustan cosas a mano.
+// De cada hoja se lee:
+//  · la tabla por distrito (bloque que empieza en "Ingreso Bruto": rally, descuentos, subtotal, IVA y retenciones, total),
+//  · la tabla de cuadrillas del nuevo esquema (Usuario para pago, Precio base, Soporte, Recolección…), si la trae.
+// Hojas del mismo contratista (p.ej. Marco Anaya: GDL, Tepic, Colima, León) se juntan en un estado.
 var EC = null, ECI = 0, ECSUC = 'ALL', ECOPEN = {}, TAB = 'a';
 var EC_MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
@@ -9,83 +11,113 @@ function ecU(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().
 function ecL(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
 function ecN(v) { var n = +v; return isFinite(n) ? n : 0; }
 function ecIso(d) { d = new Date(d.getTime() + 12 * 3600e3); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+// "GS2-OCC-GDL GDL ESTADIO" → "GDL Estadio" · "CBA CORDOBA ORIZABA" → "Córdoba Orizaba" · "GS2-BAJ-LON LEON" → "León"
+function ecDistName(s) {
+  var n = ecU(s).replace(/^.*-[A-Z]{2,4}\s+/, '').replace(/^(?!GDL\b)[A-Z]{3}\s+(?=\S)/, '');
+  var fix = { LEON: 'León', LOPEZ: 'López', CORDOBA: 'Córdoba', QUERETARO: 'Querétaro', SAN: 'San' };
+  return n.split(' ').map(function (w) { return w === 'GDL' ? 'GDL' : fix[w] || w.charAt(0) + w.slice(1).toLowerCase(); }).join(' ');
+}
 
 function ecParseSheet(rows, sheet) {
+  var S = { hoja: sheet.trim(), nombre: '', fechas: [], cols: null, cuad: [], resumen: null };
+  var lc = 2;
+  for (var i = 0; i < Math.min(rows.length, 20) && !S.nombre; i++) { var r = rows[i] || [];
+    for (var j = 0; j < r.length; j++) if (ecU(r[j]) === 'ESTADO DE CUENTA CONTRATISTA') { lc = j; S.nombre = ecL(r[j + 1]); break; } }
+  if (!S.nombre) S.nombre = S.hoja;
+  // Tabla de cuadrillas (formato nuevo)
   var h = -1;
-  for (var i = 0; i < rows.length; i++) { var r = rows[i] || [];
+  for (i = 0; i < rows.length; i++) { r = rows[i] || [];
     if (r.some(function (x) { return ecU(x) === 'USUARIO PARA PAGO'; }) && r.some(function (x) { return ecU(x) === 'PRECIO BASE'; })) { h = i; break; } }
-  if (h < 0) {
-    var old = rows.some(function (r) { return r && r.some(function (x) { return ecU(x).indexOf('ESTRELLAS') >= 0; }); });
-    return { skip: true, hoja: sheet, por: old ? 'formato anterior (estrellas)' : 'sin tabla de cuadrillas' };
-  }
-  var lc = 2, nombre = '';
-  for (i = 0; i < h && !nombre; i++) { r = rows[i] || [];
-    for (var j = 0; j < r.length; j++) if (ecU(r[j]) === 'ESTADO DE CUENTA CONTRATISTA') { lc = j; nombre = ecL(r[j + 1]); break; } }
-  var S = { hoja: sheet.trim(), nombre: nombre || sheet.trim(), fechas: [], adic: [], cuad: [], cuadrillas: 0, asist: 0, os: 0, pago: 0, descTot: 0, subtotal: 0, iva: 0, total: 0 };
-  var mode = '';
-  for (i = 0; i < h; i++) { r = rows[i] || []; var L = ecU(r[lc]), V = r[lc + 1];
+  var top = h >= 0 ? h : Math.min(rows.length, 60);
+  // Resumen de la izquierda (columna de etiquetas): fechas y, como respaldo, pago / adicionales / subtotal / IVA / total
+  var R = { adic: [], pago: 0, descTot: 0, sub: 0, iva: 0, total: 0 }, mode = '';
+  for (i = 0; i < top; i++) { r = rows[i] || []; var L = ecU(r[lc]), V = r[lc + 1];
     if (V instanceof Date) S.fechas.push(ecIso(V));
     if (!L) continue;
     if (L === 'ADICIONALES Y DESCUENTOS') { mode = 'adic'; continue; }
-    if (mode === 'adic') { if (L === 'TOTAL') { S.descTot = ecN(V); mode = 'post'; } else S.adic.push({ c: ecL(r[lc]), m: ecN(V) }); continue; }
-    if (mode === 'post') { if (L === 'SUBTOTAL A FACTURAR') S.subtotal = ecN(V); else if (L === 'IVA Y RETENCIONES') S.iva = ecN(V); else if (L === 'TOTAL') { S.total = ecN(V); mode = 'fin'; } continue; }
-    if (L === 'CUADRILLAS ACTIVAS') S.cuadrillas = ecN(V);
-    else if (L === 'ASISTENCIAS TOTALES') S.asist = ecN(V);
-    else if (L === 'OS TOTALES') S.os = ecN(V);
-    else if (L === 'PAGO TOTAL') S.pago = ecN(V);
+    if (mode === 'adic') { if (L === 'TOTAL') { R.descTot = ecN(V); mode = 'post'; } else R.adic.push({ c: ecL(r[lc]), m: ecN(V) }); continue; }
+    if (mode === 'post') { if (L === 'SUBTOTAL A FACTURAR') R.sub = ecN(V); else if (L === 'IVA Y RETENCIONES') R.iva = ecN(V); else if (L === 'TOTAL') { R.total = ecN(V); mode = 'fin'; } continue; }
+    if (L === 'PAGO TOTAL') R.pago = ecN(V);
   }
-  var H = (rows[h] || []).map(ecU);
-  function col(n) { return H.indexOf(n); }
-  var C = { u: col('USUARIO PARA PAGO'), suc: col('SUCURSAL'), tipo: col('TIPO DISTRITO'), ctr: col('CONTRATISTA'), p: col('PRECIO BASE'), ps: col('PRECIO SOPORTE'),
-    pr: col('PRECIO RECOLECCION'), fol: col('FOLIOS TOTAL'), d: col('# ASISTENCIAS'), sop: col('SOPORTE'), reco: col('RECOLECCION'), otras: col('OTRAS OS'),
-    fest: col('DIA FESTIVO'), sopM: col('$$$ SOPORTE'), recoM: col('$$$ RECOLECCION'), otrasM: col('$$$ OTRAS OS'), boost: col('BOOST DIA FESTIVO'),
-    festM: col('$$$ DIA FESTIVO'), tot: col('TOTAL') };
-  function g(r, k) { return C[k] >= 0 ? r[C[k]] : null; }
-  for (i = h + 1; i < rows.length; i++) { r = rows[i] || []; var u = ecL(g(r, 'u'));
-    if (!u) { if (S.cuad.length) break; else continue; }
-    var suc = ecL(g(r, 'suc'));
-    S.cuad.push({ u: u, suc: suc, dist: Calc.distDe(suc), ctr: ecL(g(r, 'ctr')), p: ecN(g(r, 'p')), ps: ecN(g(r, 'ps')), pr: ecN(g(r, 'pr')),
-      fol: ecN(g(r, 'fol')), d: ecN(g(r, 'd')), sop: ecN(g(r, 'sop')), reco: ecN(g(r, 'reco')), otras: ecN(g(r, 'otras')), fest: ecN(g(r, 'fest')),
-      sopM: ecN(g(r, 'sopM')), recoM: ecN(g(r, 'recoM')), otrasM: ecN(g(r, 'otrasM')), boost: ecN(g(r, 'boost')), festM: ecN(g(r, 'festM')), tot: ecN(g(r, 'tot')) });
+  S.resumen = R;
+  // Tabla por distrito: etiqueta "Ingreso Bruto" a la derecha del resumen; encabezados de distrito en la fila de arriba
+  var br = -1, bc = -1;
+  for (i = 0; i < top && br < 0; i++) { r = rows[i] || [];
+    for (j = lc + 2; j < r.length; j++) if (ecU(r[j]).indexOf('INGRESO BRUTO') === 0) { br = i; bc = j; break; } }
+  if (br > 0) {
+    var hdr = rows[br - 1] || [], cs = [];
+    for (j = bc + 1; j < Math.max(hdr.length, (rows[br] || []).length); j++) if (ecL(hdr[j])) cs.push(j);
+    var cols = cs.map(function (j) { return { name: ecDistName(hdr[j]), raw: ecU(hdr[j]), ingreso: 0, items: [], descTot: 0, sub: 0, iva: 0, total: 0 }; });
+    for (i = br; i < rows.length; i++) { r = rows[i] || []; L = ecU(r[bc]); if (!L) continue;
+      var vals = cs.map(function (j) { return ecN(r[j]); });
+      if (L.indexOf('INGRESO BRUTO') === 0) vals.forEach(function (v, k) { cols[k].ingreso = v; });
+      else if (L.indexOf('PAGO PROMEDIO') === 0) continue;
+      else if (L.indexOf('TOTAL DE DESCUENTO') === 0) vals.forEach(function (v, k) { cols[k].descTot = v; });
+      else if (L === 'SUBTOTAL A FACTURAR') vals.forEach(function (v, k) { cols[k].sub = v; });
+      else if (L === 'IVA Y RETENCIONES') vals.forEach(function (v, k) { cols[k].iva = v; });
+      else if (L === 'TOTAL') { vals.forEach(function (v, k) { cols[k].total = v; }); break; }
+      else { var t = ecL(r[bc]); vals.forEach(function (v, k) { cols[k].items.push({ c: t, m: v }); }); }
+    }
+    S.cols = cols;
   }
-  if (!S.cuad.length) return { skip: true, hoja: sheet, por: 'sin cuadrillas' };
-  var sumT = S.cuad.reduce(function (a, c) { return a + c.tot; }, 0);
-  if (!S.pago) S.pago = sumT;
-  S.dif = Math.round(sumT - S.pago);
-  // Ajuste del precio: con el HC autorizado del mes se reproduce el precio del archivo (días por cuadrilla y folios al día)
-  S.fechas.sort(); S.inicio = S.fechas[0] || ''; S.fin = S.fechas[S.fechas.length - 1] || '';
-  var mk = (S.inicio || '').slice(0, 7), ent = Calc.matchC(S.cuad[0].ctr, S.cuad[0].dist) || Calc.matchC(S.nombre, S.cuad[0].dist) || Calc.matchC(sheet, S.cuad[0].dist);
-  S.parteNombre = ent && ent.corto ? ent.corto : titleName(S.hoja);
-  var hc = ent && mk ? Calc.hcFor(ent.id, mk) : null;
-  if (hc) {
-    var A = 0, F = 0; S.cuad.forEach(function (c) { A += c.d; F += c.fol; });
-    var a = Math.floor(A / hc), pr = Math.floor(F / hc / Calc.P.diasMes * 10) / 10, pa = Calc.precioA(a, pr);
-    var adjA = a >= Calc.P.metaDias ? 0 : -(Calc.P.metaDias - Math.max(a, Calc.P.metaDias - 2)) * Calc.P.penal;
-    var ok = S.cuad.every(function (c) { var tp = Calc.tipoDist(c.dist), o = Calc.baseFor(ent.id, c.dist, mk);
-      var base = o != null ? o : Calc.P.base.A + (tp === 'LM' ? 50 : tp === 'B' ? -40 : 0); return Math.abs(base + pa - Calc.P.base.A - c.p) < 0.5; });
-    S.regla = { hc: hc, dias: a, prod: pr, adjA: adjA, adjP: pa - Calc.P.base.A - adjA, ok: ok };
+  if (h >= 0) {
+    var H = (rows[h] || []).map(ecU);
+    var C = {}; [['u', 'USUARIO PARA PAGO'], ['suc', 'SUCURSAL'], ['p', 'PRECIO BASE'], ['ps', 'PRECIO SOPORTE'], ['pr', 'PRECIO RECOLECCION'], ['fol', 'FOLIOS TOTAL'],
+      ['d', '# ASISTENCIAS'], ['sop', 'SOPORTE'], ['reco', 'RECOLECCION'], ['otras', 'OTRAS OS'], ['fest', 'DIA FESTIVO'], ['sopM', '$$$ SOPORTE'],
+      ['recoM', '$$$ RECOLECCION'], ['otrasM', '$$$ OTRAS OS'], ['boost', 'BOOST DIA FESTIVO'], ['festM', '$$$ DIA FESTIVO'], ['tot', 'TOTAL']].forEach(function (x) { C[x[0]] = H.indexOf(x[1]); });
+    for (i = h + 1; i < rows.length; i++) { r = rows[i] || []; var u = ecL(C.u >= 0 ? r[C.u] : '');
+      if (!u) { if (S.cuad.length) break; else continue; }
+      var o = { u: u }; Object.keys(C).forEach(function (k) { if (k !== 'u') o[k] = k === 'suc' ? ecL(r[C[k]]) : ecN(C[k] >= 0 ? r[C[k]] : 0); });
+      o.dist = Calc.distDe(o.suc); S.cuad.push(o);
+    }
   }
+  if (!S.cols && !S.cuad.length) {
+    var old = rows.some(function (r) { return r && r.some(function (x) { return ecU(x).indexOf('ESTRELLAS') >= 0; }); });
+    return { skip: true, hoja: sheet, por: old ? 'formato anterior (estrellas)' : 'sin datos' };
+  }
+  S.fechas.sort();
   return S;
 }
 
 function ecParse(wb) {
   var G = {}, ord = [], skip = [];
   wb.SheetNames.forEach(function (n) {
-    var rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null });
-    var S = ecParseSheet(rows, n);
+    var S = ecParseSheet(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null }), n);
     if (S.skip) { skip.push(S); return; }
     var k = ecU(S.nombre);
-    if (!G[k]) { G[k] = { nombre: titleName(S.nombre), partes: [] }; ord.push(k); }
-    G[k].partes.push(S);
+    if (!G[k]) { G[k] = { nombre: titleName(S.nombre).replace(/\bGdl\b/g, 'GDL'), hojas: [] }; ord.push(k); }
+    G[k].hojas.push(S);
   });
-  var L = ord.map(function (k) { var c = G[k];
-    c.partes.sort(function (a, b) { return b.pago - a.pago; });
-    ['cuadrillas', 'asist', 'os', 'pago', 'descTot', 'subtotal', 'iva', 'total'].forEach(function (f) { c[f] = c.partes.reduce(function (a, p) { return a + p[f]; }, 0); });
-    var fs = []; c.partes.forEach(function (p) { fs = fs.concat(p.fechas); }); fs.sort();
-    c.inicio = fs[0] || ''; c.fin = fs[fs.length - 1] || '';
+  var L = ord.map(function (k) { var c = G[k], cols = [], fs = [];
+    c.cuad = []; c.hojas.forEach(function (S) { c.cuad = c.cuad.concat(S.cuad); fs = fs.concat(S.fechas); if (S.cols) cols = cols.concat(S.cols); });
+    // Hoja sin tabla por distrito y que ninguna otra tabla cubre (p.ej. distrito con su propia hoja): usa su resumen de la izquierda
+    c.hojas.forEach(function (S) {
+      if (S.cols) return;
+      var nm = S.cuad.map(function (t) { return ecU(t.suc).replace(/^.*INT-[A-Z]{2,4}\s*/, ''); });
+      var cubierta = nm.length && nm.every(function (x) { return cols.some(function (cl) { return x && cl.raw.indexOf(x) >= 0; }); });
+      if (cubierta) return;
+      var R = S.resumen; cols.push({ name: titleName(S.hoja), ingreso: R.pago, items: R.adic, descTot: R.descTot, sub: R.sub, iva: R.iva, total: R.total });
+    });
+    c.cols = cols.filter(function (cl) { return [cl.ingreso, cl.sub, cl.total].some(function (v) { return Math.round(v); }) || cl.items.some(function (x) { return Math.round(x.m); }); });
+    ['ingreso', 'descTot', 'sub', 'iva', 'total'].forEach(function (f) { c[f] = c.cols.reduce(function (a, cl) { return a + cl[f]; }, 0); });
+    fs.sort(); c.inicio = fs[0] || ''; c.fin = fs[fs.length - 1] || '';
+    c.cuadrillas = c.cuad.length; c.folios = ecSum(c.cuad, 'fol'); c.dias = ecSum(c.cuad, 'd');
+    delete c.hojas;
     return c; });
   L.sort(function (a, b) { return a.nombre < b.nombre ? -1 : 1; });
   return { contratistas: L, omitidas: skip };
+}
+// Revisiones internas (solo en la pantalla, no en el HTML del contratista)
+function ecChecks(c) {
+  var w = [];
+  c.cols.forEach(function (cl) {
+    var s = cl.items.reduce(function (a, x) { return a + x.m; }, 0);
+    if (Math.abs(cl.ingreso + s - cl.sub) > 1) w.push(cl.name + ': ingreso bruto ' + ecF(cl.ingreso) + ' + conceptos ' + ecF(s) + ' no da el subtotal ' + ecF(cl.sub) + '.');
+    if (Math.abs(cl.sub + cl.iva - cl.total) > 1) w.push(cl.name + ': subtotal + IVA no da el total.');
+  });
+  var tc = ecSum(c.cuad, 'tot');
+  if (c.cuad.length && Math.abs(tc - c.ingreso) > 1) w.push('La suma de las cuadrillas (' + ecF(tc) + ') no es igual al ingreso bruto de la tabla por distrito (' + ecF(c.ingreso) + ').');
+  return w;
 }
 
 // ---------- vista ----------
@@ -98,78 +130,48 @@ function ecPeriodo(c) {
 }
 function ecMesTxt(c) { var k = c.fin || c.inicio; return k ? EC_MES[+k.slice(5, 7) - 1].replace(/^./, function (x) { return x.toUpperCase(); }) + ' ' + k.slice(0, 4) : ''; }
 function ecName(u) { return (typeof EC_NAMES !== 'undefined' && EC_NAMES[u]) ? titleName(EC_NAMES[u]) : u; }
-function ecSuc(s) { var n = String(s || '').replace(/^.*?INT-[A-Z]{2,3}\s*/, '').trim(); return n ? titleName(n).replace(/\bGdl\b/g, 'GDL') : s; }
+function ecSuc(s) { return ecDistName(String(s || '').replace(/^.*?INT-/, '')); }
 function ecSum(L, f) { return L.reduce(function (a, x) { return a + (x[f] || 0); }, 0); }
-function ecPrecios(cuad) { // precios distintos dentro de un grupo de cuadrillas
-  var o = {}; cuad.forEach(function (c) { o[c.p] = (o[c.p] || 0) + c.fol; });
-  return Object.keys(o).map(Number).sort(function (a, b) { return o[b] - o[a]; });
+function ecPrecios(cuad, f) { var o = {}; cuad.forEach(function (c) { o[c[f || 'p']] = (o[c[f || 'p']] || 0) + c.fol + 1; });
+  return Object.keys(o).map(Number).filter(function (x) { return x; }).sort(function (a, b) { return o[b] - o[a]; }); }
+
+// Tabla por distrito tal cual el archivo: ingreso bruto, conceptos (rally, descuentos…), total de descuentos, subtotal, IVA, total
+function ecResultados(c) {
+  var K = c.cols, multi = K.length > 1, con = [], idx = {};
+  K.forEach(function (cl) { cl.items.forEach(function (x) { var k = ecU(x.c); if (!(k in idx)) { idx[k] = con.length; con.push({ t: x.c, k: k }); } }); });
+  function v(cl, k) { return cl.items.filter(function (x) { return ecU(x.c) === k; }).reduce(function (a, x) { return a + x.m; }, 0); }
+  function row(lbl, get, cls) { var vals = K.map(get), tot = vals.reduce(function (a, x) { return a + x; }, 0);
+    return '<tr class="' + (cls || '') + '"><td class="nm">' + lbl + '</td>' + vals.map(function (x) { return '<td class="r' + (x < -0.5 && !cls ? ' neg' : '') + '">' + ecDash(x) + '</td>'; }).join('') +
+      (multi ? '<td class="r tc' + (tot < -0.5 && !cls ? ' neg' : '') + '">' + ecDash(tot) + '</td>' : '') + '</tr>'; }
+  var b = row('Ingreso bruto<small>pago por folios del mes</small>', function (cl) { return cl.ingreso; }, 'sub'), n = 0;
+  con.forEach(function (x) { if (K.every(function (cl) { return Math.round(v(cl, x.k)) === 0; })) return; n++;
+    b += row(esc(x.t.charAt(0).toUpperCase() + x.t.slice(1)), function (cl) { return v(cl, x.k); }); });
+  if (!n) b += '<tr><td class="nm" colspan="' + (K.length + (multi ? 2 : 1)) + '"><span class="z">Sin rally, adicionales ni descuentos este mes</span></td></tr>';
+  b += row('Total de descuentos y adicionales', function (cl) { return cl.descTot; }, 'sub') +
+    row('Subtotal a facturar', function (cl) { return cl.sub; }, 'sub') +
+    row('IVA y retenciones', function (cl) { return cl.iva; }) +
+    row('Total a facturar', function (cl) { return cl.total; }, 'grand');
+  return '<div class="tw2"><table class="rs ecr"><thead><tr><th>Concepto</th>' + K.map(function (cl) { return '<th class="r">' + esc(cl.name) + '</th>'; }).join('') +
+    (multi ? '<th class="r">Total</th>' : '') + '</tr></thead><tbody>' + b + '</tbody></table></div>';
 }
-function ecAdj(n) { return n > 0 ? '+$' + n : n < 0 ? '−$' + (-n) : '$0'; }
 
 function ecPriceCard(c) {
-  var multi = c.partes.length > 1;
-  var h = '<div class="c-price"><div class="top"><span class="l">Tu precio por folio</span></div>';
-  c.partes.forEach(function (p) {
-    var R = p.regla, pr = ecPrecios(p.cuad);
-    h += '<div class="ecp">' + (multi ? '<div class="ecp-n">' + esc(p.parteNombre) + '</div>' : '') +
-      '<div class="ecp-v">' + pr.map(function (x) { return '$' + x; }).join(' · ') + '</div>';
-    if (R && R.ok) h += '<div class="ecp-w"><span>' + R.dias + ' días por cuadrilla <b class="' + (R.adjA < 0 ? 'dn' : 'z') + '">' + ecAdj(R.adjA) + '</b></span>' +
-      '<span>' + R.prod.toFixed(1) + ' folios al día <b class="' + (R.adjP > 0 ? 'up' : 'z') + '">' + ecAdj(R.adjP) + '</b></span><span>HC autorizado ' + R.hc + '</span></div>';
-    h += '<div class="ecp-s">Soporte ' + ecPrecios(p.cuad.map(function (x) { return { p: x.ps, fol: x.fol }; })).map(function (x) { return '$' + x; }).join(' · ') + ' · Recolección $' + (p.cuad[0].pr || 150) + '</div></div>';
-  });
-  return h + '<div class="ecp-f">Días por cuadrilla y folios al día se miden sobre el HC autorizado (meta 25 días y 3.5 folios al día).</div></div>';
-}
-
-function ecResultados(c) {
-  var P_ = c.partes, multi = P_.length > 1;
-  function cnt(p, k) { return ecSum(p.cuad, k); }
-  var lines = [
-    { t: 'Folios', s: 'instalaciones, cambios y demás', k: 'otras', m: 'otrasM' },
-    { t: 'Soporte', s: 'precio − $40', k: 'sop', m: 'sopM' },
-    { t: 'Recolección', s: '$150 cada una', k: 'reco', m: 'recoM' },
-    { t: 'Día festivo', s: 'folios a precio + bono $350', k: 'fest', m: 'festM' }
-  ];
-  var th = '<tr><th>Concepto</th>' + (multi ? P_.map(function (p) { return '<th class="r">' + esc(p.parteNombre) + '</th>'; }).join('') + '<th class="r">Total</th>' : '<th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Monto</th>') + '</tr>';
-  var b = '';
-  lines.forEach(function (L) {
-    var any = P_.some(function (p) { return cnt(p, L.k) || cnt(p, L.m) || (L.k === 'fest' && cnt(p, 'boost')); });
-    if (!any && L.k === 'fest') return;
-    function mon(p) { return cnt(p, L.m) + (L.k === 'fest' ? 0 : 0); }
-    if (multi) {
-      b += '<tr><td class="nm">' + L.t + '<small>' + L.s + '</small></td>' + P_.map(function (p) { var n = cnt(p, L.k);
-        return '<td class="r">' + ecDash(mon(p)) + (n ? '<small>' + n.toLocaleString('en-US') + '</small>' : '') + '</td>'; }).join('') +
-        '<td class="r"><b>' + ecDash(P_.reduce(function (a, p) { return a + mon(p); }, 0)) + '</b><small>' + P_.reduce(function (a, p) { return a + cnt(p, L.k); }, 0).toLocaleString('en-US') + '</small></td></tr>';
-    } else { var p = P_[0], n = cnt(p, L.k), m = mon(p), pr = L.k === 'otras' ? ecPrecios(p.cuad) : L.k === 'sop' ? ecPrecios(p.cuad.map(function (x) { return { p: x.ps, fol: x.fol }; })) : L.k === 'reco' ? [p.cuad[0].pr || 150] : [];
-      b += '<tr><td class="nm">' + L.t + '<small>' + L.s + '</small></td><td class="r">' + n.toLocaleString('en-US') + '</td><td class="r">' + (pr.length === 1 ? '$' + pr[0] : pr.length ? '$' + pr.join(' / $') : '') + '</td><td class="r">' + ecDash(m) + '</td></tr>'; }
-  });
-  // Pago total por folios (incluye bono de festivo si lo hay)
-  function totRow(lbl, f, cls) { return '<tr class="' + cls + '"><td class="nm">' + lbl + '</td>' + (multi ? P_.map(function (p) { return '<td class="r">' + ecDash(p[f]) + '</td>'; }).join('') + '<td class="r">' + ecDash(c[f]) + '</td>' : '<td></td><td></td><td class="r">' + ecDash(c[f]) + '</td>') + '</tr>'; }
-  var boost = P_.reduce(function (a, p) { return a + cnt(p, 'boost'); }, 0);
-  if (boost) b += '<tr><td class="nm">Bono día festivo</td>' + (multi ? P_.map(function (p) { return '<td class="r">' + ecDash(cnt(p, 'boost')) + '</td>'; }).join('') + '<td class="r"><b>' + ecDash(boost) + '</b></td>' : '<td></td><td></td><td class="r">' + ecDash(boost) + '</td>') + '</tr>';
-  b += totRow('Pago por folios', 'pago', 'sub');
-  // Adicionales y descuentos: conceptos con monto en algún distrito, en el orden del archivo
-  var con = [], idx = {};
-  P_.forEach(function (p) { p.adic.forEach(function (a) { var k = ecU(a.c); if (!(k in idx)) { idx[k] = con.length; con.push({ t: a.c, k: k }); } }); });
-  var shown = 0;
-  con.forEach(function (x) {
-    var vals = P_.map(function (p) { return p.adic.filter(function (a) { return ecU(a.c) === x.k; }).reduce(function (s, a) { return s + a.m; }, 0); });
-    var tot = vals.reduce(function (a, v) { return a + v; }, 0);
-    if (vals.every(function (v) { return Math.round(v) === 0; })) return;
-    shown++;
-    b += '<tr class="ad"><td class="nm">' + esc(x.t) + '</td>' + (multi ? vals.map(function (v) { return '<td class="r ' + (v < 0 ? 'neg' : '') + '">' + ecDash(v) + '</td>'; }).join('') + '<td class="r ' + (tot < 0 ? 'neg' : '') + '"><b>' + ecDash(tot) + '</b></td>' : '<td></td><td></td><td class="r ' + (tot < 0 ? 'neg' : '') + '">' + ecDash(tot) + '</td>') + '</tr>';
-  });
-  if (!shown) b += '<tr class="ad"><td class="nm" colspan="' + (multi ? P_.length + 2 : 4) + '"><span class="z">Sin adicionales ni descuentos este mes</span></td></tr>';
-  else b += totRow('Total adicionales y descuentos', 'descTot', 'sub');
-  b += totRow('Subtotal a facturar', 'subtotal', 'sub') + totRow('IVA y retenciones', 'iva', '') + totRow('Total a facturar', 'total', 'grand');
-  return '<div class="tw2"><table class="rs ecr">' + '<thead>' + th + '</thead><tbody>' + b + '</tbody></table></div>';
+  if (!c.cuad.length) return '';
+  var D = {}, O = [];
+  c.cuad.forEach(function (t) { var k = t.dist || t.suc; if (!D[k]) { D[k] = { suc: t.suc, t: [] }; O.push(k); } D[k].t.push(t); });
+  O.sort(function (a, b) { return ecSum(D[b].t, 'fol') - ecSum(D[a].t, 'fol'); });
+  var h = '<div class="c-price"><div class="top"><span class="l">Precio por folio</span></div><table class="ecpt"><thead><tr><th></th><th class="r">Folio</th><th class="r">Soporte</th><th class="r">Recolección</th></tr></thead><tbody>';
+  O.forEach(function (k) { var t = D[k].t;
+    h += '<tr><td>' + esc(ecSuc(D[k].suc)) + '</td><td class="r big">' + ecPrecios(t).map(function (x) { return '$' + x; }).join(' / ') + '</td><td class="r">' +
+      ecPrecios(t, 'ps').map(function (x) { return '$' + x; }).join(' / ') + '</td><td class="r">' + ecPrecios(t, 'pr').map(function (x) { return '$' + x; }).join(' / ') + '</td></tr>'; });
+  return h + '</tbody></table><div class="ecp-f">Precio del mes según el esquema destajo con póliza (días por cuadrilla y folios al día sobre tu HC autorizado).</div></div>';
 }
 
 function ecSetSuc(k) { ECSUC = k; if (k !== 'ALL') ECOPEN[k] = true; ecDetDraw(); }
 function ecTog(k) { ECOPEN[k] = !ECOPEN[k]; ecDetDraw(); }
 function ecDetDraw() { var el = document.getElementById('ecdet'); if (el) el.innerHTML = ecDet(ecCur()); }
 function ecDet(c) {
-  var all = []; c.partes.forEach(function (p) { all = all.concat(p.cuad); });
-  var D = {}, O = [];
+  var all = c.cuad, D = {}, O = [];
   all.forEach(function (t) { var k = t.dist || t.suc; if (!D[k]) { D[k] = { suc: t.suc, t: [] }; O.push(k); } D[k].t.push(t); });
   O.sort(function (a, b) { return ecSum(D[b].t, 'tot') - ecSum(D[a].t, 'tot'); });
   if (ECSUC !== 'ALL' && !D[ECSUC]) ECSUC = 'ALL';
@@ -180,7 +182,8 @@ function ecDet(c) {
   h += '<div class="tw2"><table class="rs sucT ecd"><thead><tr><th>' + (O.length > 1 ? 'Sucursal / técnico' : 'Técnico') + '</th><th class="r">Días trabajados</th><th class="r">Folios</th><th class="r">Folios al día</th><th class="r">Soporte</th><th class="r">Recolección</th><th class="r">Otros folios</th>' +
     (fest ? '<th class="r">Día festivo</th>' : '') + '<th class="r">Precio por folio</th><th class="r">Pago</th></tr></thead><tbody>';
   var T = { n: 0, d: 0, fol: 0, sop: 0, reco: 0, otras: 0, fe: 0, tot: 0 };
-  function cells(x, pr) { return '<td class="r">' + x.d.toLocaleString('en-US') + '</td><td class="r">' + x.fol.toLocaleString('en-US') + '</td><td class="r">' + (x.pd != null ? x.pd : '') + '</td><td class="r">' + x.sop + '</td><td class="r">' + x.reco + '</td><td class="r">' + x.otras.toLocaleString('en-US') + '</td>' +
+  function nn(x) { return (x || 0).toLocaleString('en-US'); }
+  function cells(x, pr) { return '<td class="r">' + nn(x.d) + '</td><td class="r">' + nn(x.fol) + '</td><td class="r">' + (x.pd != null ? x.pd : '') + '</td><td class="r">' + nn(x.sop) + '</td><td class="r">' + nn(x.reco) + '</td><td class="r">' + nn(x.otras) + '</td>' +
       (fest ? '<td class="r">' + ecDash(x.fe) + '</td>' : '') + '<td class="r">' + pr + '</td><td class="r"><b>' + ecF(x.tot) + '</b></td>'; }
   O.forEach(function (k) {
     if (ECSUC !== 'ALL' && ECSUC !== k) return;
@@ -189,24 +192,24 @@ function ecDet(c) {
     T.n += g.t.length; ['d', 'fol', 'sop', 'reco', 'otras', 'fe', 'tot'].forEach(function (f) { T[f] += s[f]; });
     if (O.length > 1) h += '<tr class="sg" onclick="ecTog(\'' + k + '\')"><td class="nm"><span class="car">' + (open ? '▾' : '▸') + '</span>' + esc(ecSuc(g.suc)) + ' <span class="z">· ' + g.t.length + '</span></td>' + cells(s, ecPrecios(g.t).map(function (x) { return '$' + x; }).join(' / ')) + '</tr>';
     if (open) g.t.slice().sort(function (a, b) { return b.tot - a.tot; }).forEach(function (t) {
-      var x = { d: t.d, fol: t.fol, pd: (t.fol / Calc.P.diasMes).toFixed(1), sop: t.sop, reco: t.reco, otras: t.otras, fe: t.festM + t.boost, tot: t.tot };
+      var x = { d: t.d, fol: t.fol, pd: (t.fol / 26).toFixed(1), sop: t.sop, reco: t.reco, otras: t.otras, fe: t.festM + t.boost, tot: t.tot };
       h += '<tr class="' + (O.length > 1 ? 'st' : '') + '"><td class="nm">' + esc(ecName(t.u)) + (ecName(t.u) !== t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</td>' + cells(x, '$' + t.p) + '</tr>'; });
   });
   h += '</tbody><tfoot><tr><td>' + (ECSUC === 'ALL' ? 'Total' : 'Total ' + esc(ecSuc(D[ECSUC].suc))) + ' <span class="z">· ' + T.n + ' cuadrillas</span></td>' + cells(T, '') + '</tr></tfoot></table></div>';
-  return h + '<div class="how">Folios al día = folios del técnico ÷ 26. El precio de cada folio sale de la tabla del esquema con el ajuste del mes.</div>';
+  return h + '<div class="how">Folios al día = folios del técnico ÷ 26.</div>';
 }
 
 function renderEC(c) {
-  var mes = ecMesTxt(c), multi = c.partes.length > 1;
+  var mes = ecMesTxt(c), multi = c.cols.length > 1;
   var h = '<div class="pg ecpg"><div class="pg-h"><div class="ey">Estado de cuenta · ' + mes + '</div><h1>' + esc(c.nombre) + '</h1>' +
-    '<div class="meta"><span>Periodo <b>' + ecPeriodo(c) + '</b></span><span><b>' + c.cuadrillas + '</b> cuadrillas</span><span><b>' + c.os.toLocaleString('en-US') + '</b> folios</span><span><b>' + c.asist.toLocaleString('en-US') + '</b> días trabajados</span>' +
-    (multi ? '<span>' + c.partes.map(function (p) { return esc(p.parteNombre); }).join(' · ') + '</span>' : '') + '</div></div>';
+    '<div class="meta"><span>Periodo <b>' + ecPeriodo(c) + '</b></span>' + (c.cuad.length ? '<span><b>' + c.cuadrillas + '</b> cuadrillas</span><span><b>' + c.folios.toLocaleString('en-US') + '</b> folios</span><span><b>' + c.dias.toLocaleString('en-US') + '</b> días trabajados</span>' : '') +
+    (multi ? '<span>' + c.cols.map(function (cl) { return esc(cl.name); }).join(' · ') + '</span>' : '') + '</div></div>';
   h += '<div class="hero"><div class="c-money"><div><div class="l">Total a facturar</div><div class="v">' + ecF(c.total) + '</div>' +
-    '<div class="ecm"><div><span>Pago por folios</span><b>' + ecF(c.pago) + '</b></div><div><span>Adicionales y descuentos</span><b>' + ecF(c.descTot) + '</b></div>' +
-    '<div class="sb"><span>Subtotal a facturar</span><b>' + ecF(c.subtotal) + '</b></div><div><span>IVA y retenciones</span><b>' + ecF(c.iva) + '</b></div></div></div>' +
-    '<div class="n">Cierre del mes con el esquema destajo con póliza. Factura por el subtotal más IVA y retenciones.</div></div>' + ecPriceCard(c) + '</div>';
-  h += '<div class="blk"><div class="blk-h"><span class="t">Cómo se arma tu pago</span><span class="s">' + (multi ? 'por distrito' : mes) + '</span></div>' + ecResultados(c) + '</div>';
-  h += '<div class="blk"><div class="blk-h"><span class="t">Detalle por cuadrilla</span><span class="s">' + (c.partes.some(function (p) { return p.cuad.some(function (t) { return t.dist !== c.partes[0].cuad[0].dist; }); }) ? 'clic en una sucursal para ver sus técnicos' : '') + '</span></div><div id="ecdet">' + ecDet(c) + '</div></div>';
+    '<div class="ecm"><div><span>Ingreso bruto</span><b>' + ecF(c.ingreso) + '</b></div><div><span>Descuentos y adicionales</span><b>' + ecF(c.descTot) + '</b></div>' +
+    '<div class="sb"><span>Subtotal a facturar</span><b>' + ecF(c.sub) + '</b></div><div><span>IVA y retenciones</span><b>' + ecF(c.iva) + '</b></div></div></div>' +
+    '<div class="n">Cierre oficial del mes · esquema destajo con póliza.</div></div>' + ecPriceCard(c) + '</div>';
+  h += '<div class="blk"><div class="blk-h"><span class="t">Estado de resultados' + (multi ? ' por distrito' : '') + '</span><span class="s">' + mes + '</span></div>' + ecResultados(c) + '</div>';
+  if (c.cuad.length) h += '<div class="blk"><div class="blk-h"><span class="t">Detalle por cuadrilla</span><span class="s">clic en una sucursal para ver sus técnicos</span></div><div id="ecdet">' + ecDet(c) + '</div></div>';
   h += '<div class="foot">Generado por QiORA Conecta · Planeación Financiera · <b>CONFIDENCIAL</b>, uso exclusivo del contratista</div></div>';
   return h;
 }
@@ -220,36 +223,35 @@ function ecDraw() {
   EC_NAMES = ecNames();
   var c = ecCur(), h = '';
   EC.contratistas.forEach(function (x, i) {
-    h += '<button class="ci' + (i === ECI ? ' on' : '') + '" onclick="ecPick(' + i + ')"><div class="cn">' + esc(x.nombre) + '</div><div class="cm"><span>' + ecF(x.total) + ' a facturar</span></div></button>'; });
+    var bad = ecChecks(x).length;
+    h += '<button class="ci' + (i === ECI ? ' on' : '') + '" onclick="ecPick(' + i + ')"><div class="cn">' + esc(x.nombre) + (bad ? ' <span class="dirty">revisar</span>' : '') + '</div><div class="cm"><span>' + ecF(x.total) + ' a facturar</span></div></button>'; });
   if (EC.omitidas.length) h += '<div class="ecom">No se incluyeron: ' + EC.omitidas.map(function (s) { return '<b>' + esc(s.hoja.trim()) + '</b> (' + s.por + ')'; }).join(', ') + '</div>';
   document.getElementById('eclist').innerHTML = h;
   document.getElementById('ecmes').textContent = ecMesTxt(c);
-  var warn = c.partes.filter(function (p) { return p.dif; }).map(function (p) { return 'En la hoja <b>' + esc(p.hoja) + '</b> la suma de las cuadrillas (' + ecF(p.pago + p.dif) + ') no cuadra con el pago total (' + ecF(p.pago) + ').'; });
-  var noRegla = c.partes.filter(function (p) { return !p.regla || !p.regla.ok; }).map(function (p) { return esc(p.parteNombre); });
-  if (noRegla.length) warn.push('El precio de ' + noRegla.join(', ') + ' no coincide con el HC autorizado de la página; se muestra el precio del archivo sin el detalle de ajustes.');
-  if (!Object.keys(EC_NAMES).length) warn.push('Para ver nombres de técnicos en lugar del usuario, carga también el archivo de bonos en la pestaña Avance de póliza.');
+  var warn = ecChecks(c).map(esc);
+  if (warn.length) warn.unshift('<b>Revisar en el Excel</b> (este aviso no sale en el HTML del contratista):');
+  if (c.cuad.length && !Object.keys(EC_NAMES).length) warn.push('Para ver nombres de técnicos en lugar del usuario, carga también el archivo de bonos en la pestaña Avance de póliza.');
   document.getElementById('ecview').innerHTML = (warn.length ? '<div class="ecwarn">' + warn.join('<br>') + '</div>' : '') + renderEC(c);
 }
 function ecLoad(f) {
   var st = document.getElementById('ecstatus'); st.textContent = 'Abriendo ' + f.name + '…';
   f.arrayBuffer().then(function (buf) {
     try {
-      var wb = XLSX.read(buf, { type: 'array', cellDates: true });
-      var R = ecParse(wb);
-      if (!R.contratistas.length) throw new Error('No encontré hojas con la tabla del nuevo esquema (Usuario para pago, Precio base…).');
+      var R = ecParse(XLSX.read(buf, { type: 'array', cellDates: true }));
+      if (!R.contratistas.length) throw new Error('No encontré hojas con la tabla por distrito ni la tabla de cuadrillas del nuevo esquema.');
       EC = R; ECI = 0; ECSUC = 'ALL'; ECOPEN = {};
       document.getElementById('ecLoader').hidden = true; document.getElementById('ecApp').hidden = false;
-      HC_READY.then(ecDraw);
+      ecDraw();
     } catch (e) { st.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; }
   });
 }
-function ecFile(c) { return 'Estado_de_cuenta_' + slug(c.nombre) + '_' + (c.fin || c.inicio).slice(0, 7) + '.html'; }
+function ecFile(c) { return 'Estado_de_cuenta_' + slug(c.nombre) + '_' + (c.fin || c.inicio || '').slice(0, 7) + '.html'; }
 function ecExport(c) {
   var css = document.querySelector('style').textContent, names = {};
-  c.partes.forEach(function (p) { p.cuad.forEach(function (t) { if (EC_NAMES[t.u]) names[t.u] = EC_NAMES[t.u]; }); });
-  var fns = [esc, titleName, ecU, ecF, ecDash, ecPeriodo, ecMesTxt, ecName, ecSuc, ecSum, ecPrecios, ecAdj, ecPriceCard, ecResultados, ecSetSuc, ecTog, ecDetDraw, ecDet, renderEC, ecCur]
+  c.cuad.forEach(function (t) { if (EC_NAMES[t.u]) names[t.u] = EC_NAMES[t.u]; });
+  var fns = [esc, titleName, ecU, ecF, ecDash, ecDistName, ecPeriodo, ecMesTxt, ecName, ecSuc, ecSum, ecPrecios, ecResultados, ecPriceCard, ecSetSuc, ecTog, ecDetDraw, ecDet, renderEC, ecCur]
     .map(function (f) { return f.toString(); }).join('\n');
-  var data = 'var EC_MES=' + JSON.stringify(EC_MES) + ';var Calc={P:{diasMes:' + Calc.P.diasMes + '}};var EC={contratistas:[' + JSON.stringify(c).replace(/</g, '\\u003c') + ']};var ECI=0,ECSUC="ALL",ECOPEN={};var EC_NAMES=' + JSON.stringify(names).replace(/</g, '\\u003c') + ';';
+  var data = 'var EC_MES=' + JSON.stringify(EC_MES) + ';var EC={contratistas:[' + JSON.stringify(c).replace(/</g, '\\u003c') + ']};var ECI=0,ECSUC="ALL",ECOPEN={};var EC_NAMES=' + JSON.stringify(names).replace(/</g, '\\u003c') + ';';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>Estado de cuenta ' + esc(c.nombre) + ' ' + ecMesTxt(c) + '</title><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' + css + '.xbar{background:#fff;border-bottom:1px solid var(--g2)}.xbar div{max-width:1120px;margin:0 auto;padding:16px 48px;display:flex;justify-content:space-between;align-items:center}.xbar img{height:30px}.xbar button{border:none;background:var(--ink);color:#fff;border-radius:10px;padding:9px 14px;font-weight:700}@media print{.xbar button{display:none}}</style></head><body>' +
@@ -259,7 +261,7 @@ function ecExport(c) {
 function ecDownloadOne() { var c = ecCur(); saveBlob(new Blob([ecExport(c)], { type: 'text/html' }), ecFile(c)); }
 function ecDownloadAll() {
   var zip = new JSZip(); EC.contratistas.forEach(function (c) { zip.file(ecFile(c), ecExport(c)); });
-  var c = EC.contratistas[0]; zip.generateAsync({ type: 'blob' }).then(function (b) { saveBlob(b, 'Estados_de_cuenta_' + (c.fin || c.inicio).slice(0, 7) + '.zip'); });
+  var c = EC.contratistas[0]; zip.generateAsync({ type: 'blob' }).then(function (b) { saveBlob(b, 'Estados_de_cuenta_' + (c.fin || c.inicio || '').slice(0, 7) + '.zip'); });
 }
 
 function setTab(t) {
