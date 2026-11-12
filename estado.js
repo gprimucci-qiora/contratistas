@@ -132,7 +132,8 @@ function ecMesTxt(c) { var k = c.fin || c.inicio; return k ? EC_MES[+k.slice(5, 
 function ecName(u) { return (typeof EC_NAMES !== 'undefined' && EC_NAMES[u]) ? titleName(EC_NAMES[u]) : u; }
 function ecSuc(s) { return ecDistName(String(s || '').replace(/^.*?INT-/, '')); }
 function ecSum(L, f) { return L.reduce(function (a, x) { return a + (x[f] || 0); }, 0); }
-function ecPrecios(cuad, f) { var o = {}; cuad.forEach(function (c) { o[c[f || 'p']] = (o[c[f || 'p']] || 0) + c.fol + 1; });
+function ecR(x) { return Math.round((+x || 0) * 100) / 100; }
+function ecPrecios(cuad, f) { var o = {}; cuad.forEach(function (c) { var k = ecR(c[f || 'p']); o[k] = (o[k] || 0) + c.fol + 1; });
   return Object.keys(o).map(Number).filter(function (x) { return x; }).sort(function (a, b) { return o[b] - o[a]; }); }
 
 // Tabla por distrito tal cual el archivo: ingreso bruto, conceptos (rally, descuentos…), total de descuentos, subtotal, IVA, total
@@ -193,7 +194,7 @@ function ecDet(c) {
     if (O.length > 1) h += '<tr class="sg" onclick="ecTog(\'' + k + '\')"><td class="nm"><span class="car">' + (open ? '▾' : '▸') + '</span>' + esc(ecSuc(g.suc)) + ' <span class="z">· ' + g.t.length + '</span></td>' + cells(s, ecPrecios(g.t).map(function (x) { return '$' + x; }).join(' / ')) + '</tr>';
     if (open) g.t.slice().sort(function (a, b) { return b.tot - a.tot; }).forEach(function (t) {
       var x = { d: t.d, fol: t.fol, pd: (t.fol / 26).toFixed(1), sop: t.sop, reco: t.reco, otras: t.otras, fe: t.festM + t.boost, tot: t.tot };
-      h += '<tr class="' + (O.length > 1 ? 'st' : '') + '"><td class="nm">' + esc(ecName(t.u)) + (ecName(t.u) !== t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</td>' + cells(x, '$' + t.p) + '</tr>'; });
+      h += '<tr class="' + (O.length > 1 ? 'st' : '') + '"><td class="nm">' + esc(ecName(t.u)) + (ecName(t.u) !== t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</td>' + cells(x, '$' + ecR(t.p)) + '</tr>'; });
   });
   h += '</tbody><tfoot><tr><td>' + (ECSUC === 'ALL' ? 'Total' : 'Total ' + esc(ecSuc(D[ECSUC].suc))) + ' <span class="z">· ' + T.n + ' cuadrillas</span></td>' + cells(T, '') + '</tr></tfoot></table></div>';
   return h + '<div class="how">Días = días trabajados · Folios/día = folios del técnico ÷ 26 · Otros = folios que no son soporte ni recolección · Precio = precio por folio.</div>';
