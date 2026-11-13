@@ -265,7 +265,7 @@ function ecFile(c) { return 'Estado_de_cuenta_' + slug(c.nombre) + '_' + (c.fin 
 function ecExport(c) {
   var css = document.querySelector('style').textContent, names = {};
   c.cuad.forEach(function (t) { if (EC_NAMES[t.u]) names[t.u] = EC_NAMES[t.u]; });
-  var fns = [esc, titleName, ecU, ecF, ecDash, ecDistName, ecPeriodo, ecMesTxt, ecName, ecSuc, ecSum, ecPrecios, ecResultados, ecPriceCard, ecSetSuc, ecTog, ecDetDraw, ecDet, renderEC, ecCur]
+  var fns = [esc, titleName, ecU, ecF, ecDash, ecDistName, ecPeriodo, ecMesTxt, ecName, ecSuc, ecSum, ecR, ecPrecios, ecResultados, ecPriceCard, ecSetSuc, ecTog, ecDetDraw, ecDet, renderEC, ecCur]
     .map(function (f) { return f.toString(); }).join('\n');
   var data = 'var EC_MES=' + JSON.stringify(EC_MES) + ';var EC={contratistas:[' + JSON.stringify(c).replace(/</g, '\\u003c') + ']};var ECI=0,ECSUC="ALL",ECOPEN={};var EC_NAMES=' + JSON.stringify(names).replace(/</g, '\\u003c') + ';';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
