@@ -282,10 +282,11 @@ function ecDownloadAll() {
 
 function setTab(t) {
   TAB = t;
-  document.getElementById('tabA').classList.toggle('on', t === 'a'); document.getElementById('tabE').classList.toggle('on', t === 'e');
+  document.getElementById('tabA').classList.toggle('on', t === 'a'); document.getElementById('tabE').classList.toggle('on', t === 'e'); document.getElementById('tabI').classList.toggle('on', t === 'i');
   var hasA = typeof DATA !== 'undefined' && DATA;
-  document.getElementById('loader').hidden = t !== 'a' || hasA; document.getElementById('app').hidden = t !== 'a' || !hasA;
-  document.getElementById('ec').hidden = t !== 'e';
+  document.getElementById('loader').hidden = t === 'e' || hasA; document.getElementById('app').hidden = t !== 'a' || !hasA;
+  document.getElementById('ec').hidden = t !== 'e'; document.getElementById('in').hidden = t !== 'i' || !hasA;
+  if (t === 'i' && hasA) inStart();
   if (t === 'e' && EC) ecDraw();
   window.scrollTo(0, 0);
 }

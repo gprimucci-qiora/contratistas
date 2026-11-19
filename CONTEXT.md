@@ -65,6 +65,14 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 - Se pueden subir varios archivos a la vez o ir agregando ("+ Agregar otro archivo"); todos los contratistas quedan en el sidebar. Si un contratista viene en dos archivos, gana el último cargado.
 - Descargas: HTML por contratista (`Estado_de_cuenta_<nombre>_<YYYY-MM>.html`, imprimible) y .zip.
 
+## Cuadrillas internas (pestaña 3, `interno.js`)
+- Decidido 2026-11-19: mismo archivo de bonos que Avance (técnicos con Contratista = "Interno"), **una ficha por distrito**, **solo productividad, sin montos**, en este mismo sitio.
+- El lector del archivo ya no descarta los Internos; `Calc.compute`, HC, precios y activos los siguen filtrando (avance de contratistas sin cambios, verificado oct-26).
+- Distrito desde la sucursal `CTA-TPI-<TIPO>-<COD> <NOMBRE>`: INT → código (GBA…); otros tipos → `TIPO-COD` (ej. `MLT-GDL` · MLT Guadalajara).
+- Técnicos con el mismo nombre en un distrito = una cuadrilla (se juntan sus usuarios y días).
+- Métricas por distrito sobre los técnicos que trabajaron (no hay HC autorizado interno): días/técnico y folios al día proyectados, metas 25 y 3.5, semáforo r/a/g con las mismas reglas que contratistas.
+- Vistas: Resumen por distrito, ficha por distrito (metas, tabla por técnico, equipo en semáforo, calendario por técnico). Descarga HTML por distrito y zip.
+
 ## Pantallas
 1. **Carga**: arrastrar Excel. Lectura en Web Worker embebido (blob) con fallback al hilo principal; ~6 s para 52 MB.
 2. **Resumen del mes** (landing): costo estimado del mes, costo a la fecha, precio promedio ponderado, días/cuadrilla, folios/día, folios vs póliza, tabla por contratista con totales.
@@ -77,6 +85,7 @@ Descargas: "Descargar este contratista" (HTML) y "Descargar todos (.zip)" (JSZip
 ## Archivos
 - `index.html` — UI, lector Excel embebido (`#wsrc`), vistas, exportación.
 - `estado.js` — pestaña Estado de cuenta (lector del Excel de comisiones, vista y exportación).
+- `interno.js` — pestaña Cuadrillas internas (cálculo de productividad por distrito, vista y exportación).
 - `calc.js` — motor de cálculo, CONTRATISTAS, HC_MES por defecto, FESTIVOS.
 - `hc.json` — HC autorizado por mes (fuente en Pages).
 - CDNs: SheetJS 0.18.5, JSZip 3.10.1 (cdnjs), Google Fonts.
