@@ -72,6 +72,10 @@ El contratista se cruza por "Usuario para pago" ↔ `USUARIO FFM`. Encabezados d
 - Técnicos con el mismo nombre en un distrito = una cuadrilla (se juntan sus usuarios y días).
 - Métricas por distrito sobre los técnicos que trabajaron (no hay HC autorizado interno): días/técnico y folios al día proyectados, metas 25 y 3.5, semáforo r/a/g con las mismas reglas que contratistas.
 - Vistas: Resumen por distrito, ficha por distrito (metas, tabla por técnico, equipo en semáforo, calendario por técnico). Descarga HTML por distrito y zip.
+- **Preview de pago** (2026-11-27): interruptor Productividad / Preview de pago en el sidebar. Muestra el **bono semanal** de cada cuadrilla interna para que el distrital lo coteje y dé visto bueno. **No recalcula**: lee tal cual las hojas `Detalle de servicios` (asistencias, órdenes, bono base, adicional, descuento, bono total por semana; columnas por encabezado de la fila de grupos), `Motos` (monto a pagar) y `Auxiliares` (monto ganado para auxiliar, asignado al distrito del técnico). Semanas = las del archivo con inicio ≤ corte; la semana que termina después del corte se muestra en gris y no entra al total. Cuadrillas con mismo nombre en el distrito se juntan. Filtra Contratista = Interno.
+  - Validado 22-nov (sem 44–47): $3,887,190 = Detalle 3,823,300 + Motos 56,090 + Auxiliares 7,800, igual que el Excel.
+  - HTML por distrito `Pago_internas_<distrito>_sem44-47.html` / zip `Pago_cuadrillas_internas_sem44-47.zip`: total por semana, tabla por cuadrilla (bono + días/órdenes por semana), detalle por semana al clic, auxiliares, cómo se calcula, casilla **Revisar** por cuadrilla, observaciones y botón **Copiar visto bueno** (texto para WhatsApp); al imprimir sale línea de firma.
+  - Texto de reglas (5 días = mitad, ≤4 = sin bono; adicional arriba de meta alta) está fijo en `pgRender`; si cambian en Supuestos, actualizarlo.
 
 ## Pantallas
 1. **Carga**: arrastrar Excel. Lectura en Web Worker embebido (blob) con fallback al hilo principal; ~6 s para 52 MB.

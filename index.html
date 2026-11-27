@@ -322,6 +322,14 @@ table.hcm td.cur{background:var(--qg-lt)}
 table.hcm input{width:48px;border:1px solid transparent;border-radius:6px;padding:6px 4px;text-align:center;font:inherit;font-weight:700;background:transparent}
 table.hcm input:hover{border-color:var(--g2)}table.hcm input:focus{outline:none;border-color:var(--qg);background:#fff}
 span.idot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:9px;vertical-align:1px}span.idot.r{background:var(--red)}span.idot.a{background:var(--amb)}span.idot.g{background:var(--qg)}
+.pgseg{display:flex;background:var(--g1);border-radius:10px;padding:3px;margin-bottom:8px}.pgseg button{flex:1;border:none;background:transparent;border-radius:8px;padding:8px 6px;font-weight:700;font-size:12.5px;color:var(--g5)}.pgseg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pgsd{font-size:11px;font-weight:500;color:var(--g4);margin-top:2px;white-space:nowrap}.pgop{opacity:.5}td.pgz{color:var(--red)}.pgrv{text-align:center;width:64px}.pgrv input{width:18px;height:18px;accent-color:var(--red)}
+table.pgt td.nm a{color:var(--ink);text-decoration:none;font-weight:700}table.pgt td.nm a:hover{color:var(--qg);text-decoration:underline}
+.pgcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.pgvb textarea{width:100%;box-sizing:border-box;border:1px solid var(--g2);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical}.pgl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+.pgbtns{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}.pgbtns button{border:none;background:var(--qg);color:#fff;border-radius:10px;padding:10px 16px;font-weight:700;font-size:14px}.pgbtns button.sec{background:#fff;color:var(--ink);border:1px solid var(--g2)}#pgOk{color:var(--qg);font-weight:700;font-size:13px}
+.pgfirma{display:none;grid-template-columns:2fr 1.5fr 1fr;gap:24px;margin-top:40px}.pgfirma div{border-top:1px solid var(--ink);padding-top:6px;font-size:12px;color:var(--g5)}
+@media print{.pgbtns,.pgrv input{display:none}.pgfirma{display:grid}.pgvb textarea{border:1px dashed var(--g4)}}
 table.hcm input::placeholder{color:var(--g4);font-weight:500}
 table.hcm.actm td{padding:6px 4px}table.hcm.actm td.nm{padding:8px 16px}
 table.hcm.actm input{color:var(--ink);font-weight:600}
@@ -448,7 +456,7 @@ table.ecd tfoot td{font-size:14px!important}
 <div id="in" hidden>
   <aside class="side">
     <div class="lg"><img src="" data-logo alt="QiORA Conecta"><div class="sub">Cuadrillas internas</div></div>
-    <div class="mes"><label>Mes</label><select id="inmes"></select></div>
+    <div class="mes" id="inmesbox"><label>Mes</label><select id="inmes"></select></div>
     <div class="nvtop" id="innv"></div><div class="lst"><div class="ttl">Distritos</div><div id="inlist"></div></div>
     <div class="ft"><button id="inDl1" style="background:var(--ink);margin-bottom:8px">⬇ Descargar este distrito</button><button id="inDlAll" style="background:#fff;color:var(--ink);border:1px solid var(--g2)">⬇ Descargar todos (.zip)</button><span class="ch" id="inChg">Cargar otro archivo</span></div>
   </aside>
@@ -462,7 +470,7 @@ table.ecd tfoot td{font-size:14px!important}
 self.onmessage = function (e) {
   try {
     post('Leyendo archivo…');
-    var wb = XLSX.read(e.data, { type: 'array', sheets: ['Cierre Iguala', 'Tecnicos'], cellDates: true, dense: true });
+    var wb = XLSX.read(e.data, { type: 'array', sheets: ['Cierre Iguala', 'Tecnicos', 'Detalle de servicios', 'Motos', 'Auxiliares'], cellDates: true, dense: true });
     if (!wb.Sheets['Cierre Iguala'] || !wb.Sheets['Tecnicos']) throw new Error('El archivo no tiene las hojas "Cierre Iguala" y "Tecnicos".');
     post('Leyendo técnicos…');
     var T = XLSX.utils.sheet_to_json(wb.Sheets['Tecnicos'], { header: 1, raw: true });
@@ -487,10 +495,49 @@ self.onmessage = function (e) {
       months[key.slice(0, 7)] = 1;
       rows.push([u, key, x[iSv]]);
     }
-    self.postMessage({ ok: true, rows: rows, tec: tec, months: Object.keys(months).sort(), sinTec: sinTec });
+    post('Leyendo bonos de internas…');
+    var pago = null; try { pago = leerPago(wb); } catch (er) { pago = { error: er.message }; }
+    self.postMessage({ ok: true, rows: rows, tec: tec, months: Object.keys(months).sort(), sinTec: sinTec, pago: pago });
   } catch (err) { self.postMessage({ ok: false, error: err.message }); }
 };
 function post(m) { self.postMessage({ progress: m }); }
+// Bono semanal de internas: se lee TAL CUAL de las hojas calculadas del archivo (Detalle de servicios, Motos, Auxiliares)
+function pU(x) { return String(x == null ? '' : x).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function pN(x) { return typeof x === 'number' && isFinite(x) ? x : 0; }
+function pD(d) { if (!(d instanceof Date)) return null; d = new Date(d.getTime() + 12 * 3600e3); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
+function pRow(A, f, max) { for (var i = 0; i < Math.min(A.length, max || 60); i++) if (A[i] && f(A[i])) return i; return -1; }
+function pCol(r, name) { for (var j = 0; j < r.length; j++) if (pU(r[j]) === name) return j; return -1; }
+function leerPago(wb) {
+  var S = wb.Sheets['Detalle de servicios']; if (!S) return null;
+  var A = XLSX.utils.sheet_to_json(S, { header: 1, raw: true });
+  var g = pRow(A, function (r) { return pCol(r, 'BONO TOTAL') >= 0; }), h = pRow(A, function (r) { return pCol(r, 'USUARIO PARA PAGO') >= 0; });
+  if (g < 0 || h < 0) return null;
+  var G = A[g], H = A[h], c = { dias: pCol(G, 'ASISTENCIAS'), ord: pCol(G, 'ORDENES TOTALES'), extra: pCol(G, 'ORDENES ADICIONALES A LA META'), base: pCol(G, 'BONO BASE'), adic: pCol(G, 'BONO ADICIONAL'), desc: pCol(G, 'DESCUENTOS POR INASISTENCIA'), tot: pCol(G, 'BONO TOTAL') };
+  for (var k in c) if (c[k] < 0) throw new Error('Detalle de servicios: falta la columna ' + k);
+  var wr = -1, dr = []; for (var i = 0; i < h; i++) { var v = A[i] && A[i][c.dias]; if (v instanceof Date) dr.push(i); else if (typeof v === 'number' && v >= 1 && v <= 53 && wr < 0) wr = i; }
+  if (wr < 0 || dr.length < 2) throw new Error('Detalle de servicios: no encontré las semanas');
+  var sem = []; for (var w = 0; typeof A[wr][c.dias + w] === 'number'; w++) sem.push({ n: A[wr][c.dias + w], ini: pD(A[dr[0]][c.dias + w]), fin: pD(A[dr[1]][c.dias + w]) });
+  var mr = pRow(A, function (r) { return pCol(r, 'META BASE') >= 0; }), mc = mr >= 0 ? pCol(A[mr], 'META BASE') : -1;
+  var iu = pCol(H, 'USUARIO PARA PAGO'), is = pCol(H, 'SUCURSAL'), inn = pCol(H, 'NOMBRE DEL TECNICO'), it = pCol(H, 'TIPO DE CUADRILLA'), ic = pCol(H, 'CONTRATISTA');
+  var det = [];
+  for (i = h + 1; i < A.length; i++) { var r = A[i]; if (!r || !r[iu]) continue;
+    var x = { u: String(r[iu]).trim(), suc: String(r[is] || ''), nom: String(r[inn] || ''), tipo: String(r[it] || ''), ctr: String(r[ic] || ''), metas: mc >= 0 ? [pN(r[mc]), pN(r[mc + 1]), pN(r[mc + 2])] : null, w: [] };
+    for (w = 0; w < sem.length; w++) x.w.push([pN(r[c.dias + w]), pN(r[c.ord + w]), pN(r[c.extra + w]), pN(r[c.base + w]), pN(r[c.adic + w]), pN(r[c.desc + w]), pN(r[c.tot + w])]);
+    det.push(x); }
+  var motos = {}, M = wb.Sheets['Motos'];
+  if (M) { var B = XLSX.utils.sheet_to_json(M, { header: 1, raw: true }), mh = pRow(B, function (r) { return pCol(r, 'USUARIO FFM') >= 0; });
+    if (mh > 0) { var fc = pCol(B[mh - 1], 'FOLIOS A PAGAR'), pc = pCol(B[mh - 1], 'MONTO A PAGAR'), mu = pCol(B[mh], 'USUARIO FFM');
+      if (fc >= 0 && pc >= 0) for (i = mh + 1; i < B.length; i++) { r = B[i]; if (!r || !r[mu]) continue; var o = {};
+        for (w = 0; typeof B[mh][pc + w] === 'number'; w++) o[B[mh][pc + w]] = [pN(r[fc + w]), pN(r[pc + w])];
+        motos[String(r[mu]).trim()] = o; } } }
+  var aux = [], X = wb.Sheets['Auxiliares'];
+  if (X) { var C = XLSX.utils.sheet_to_json(X, { header: 1, raw: true }), ah = pRow(C, function (r) { return pCol(r, 'AUXILIAR TECNICO') >= 0; });
+    if (ah > 0) { var ac = pCol(C[ah - 1], 'MONTO GANADO PARA AUXILIAR'), an = pCol(C[ah], 'AUXILIAR TECNICO'), au = pCol(C[ah], 'USUARIO FFM'), at = pCol(C[ah], 'TECNICO');
+      if (ac >= 0) for (i = ah + 1; i < C.length; i++) { r = C[i]; if (!r || !r[an] || !r[au]) continue; o = {};
+        for (w = 0; typeof C[ah][ac + w] === 'number'; w++) o[C[ah][ac + w]] = pN(r[ac + w]);
+        aux.push({ aux: String(r[an]).trim(), u: String(r[au]).trim(), tec: String(r[at] || ''), m: o }); } } }
+  return { semanas: sem, det: det, motos: motos, aux: aux };
+}
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="calc.js"></script>
