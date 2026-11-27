@@ -410,23 +410,36 @@ function pgCls(sv) {
 }
 function pgFol(i, j) {
   var c = pgCur(), t = c.tecs[i], s = PG.semanas[j], o = t.w[j], L = (t.f && t.f[j]) || [], fe = (c.regla && c.regla.fe) || 1.5;
-  var dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], cnt = { Residencial: 0, Mantenimiento: 0, Empresarial: 0 }, porDia = {};
+  var DN = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'], cnt = { Residencial: 0, Mantenimiento: 0, Empresarial: 0 }, porDia = {}, days = [];
   L.forEach(function (f) { cnt[pgCls(f[5])[0]]++; porDia[f[0]] = (porDia[f[0]] || 0) + 1; });
-  var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + ' · Semana ' + s.n + '</div><div class="st">' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + ' · ' + esc(t.u.join(' · ')) + ' · ' + esc(c.nombre) + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb">';
+  for (var d = new Date(s.ini + 'T12:00:00'), k = 0; k < 7; k++, d.setDate(d.getDate() + 1)) days.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+  var mx = Math.max.apply(null, days.map(function (x) { return porDia[x] || 0; }).concat([1])), meta = cnt.Residencial + cnt.Mantenimiento + cnt.Empresarial * fe;
+  var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + '</div><div class="st">Semana ' + s.n + ' · ' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + ' · ' + esc(t.u.join(' · ')) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb pf">';
   h += '<button class="pgback" onclick="pgTec(' + i + ')">‹ Todas las semanas</button>';
-  h += '<div class="kp"><div class="k"><div class="l">Folios</div><div class="v">' + L.length + '</div><div class="s">' + Object.keys(porDia).length + ' días con folios</div></div>' +
-    '<div class="k"><div class="l">Para la meta</div><div class="v">' + pgOrd(cnt.Residencial + cnt.Mantenimiento + cnt.Empresarial * fe) + '</div><div class="s">' + cnt.Residencial + ' resid. · ' + cnt.Mantenimiento + ' mant. · ' + cnt.Empresarial + ' empr. ×' + fe + '</div></div>' +
-    '<div class="k ' + (o.tot ? 'good' : 'bad') + '"><div class="l">Bono de la semana</div><div class="v">' + (o.tot ? pgMoney(o.tot) : '$0') + '</div><div class="s">' + (o.motoFol ? o.motoFol + ' folios de moto' : o.dias + ' días trabajados') + '</div></div></div>';
-  if (!L.length) h += '<div class="note a">No hay folios de esta cuadrilla en esta semana.</div>';
-  else {
-    h += '<div class="tw2"><table class="rs"><thead><tr><th>Día</th><th>OS</th><th>OT</th><th>Tipo</th><th>Subtipo</th><th>Cuenta como</th></tr></thead><tbody>';
-    var prev = '';
-    L.forEach(function (f) {
-      var d = new Date(f[0] + 'T12:00:00'), cl = pgCls(f[5]), nd = f[0] !== prev; prev = f[0];
-      h += '<tr' + (nd ? ' class="pgday"' : '') + '><td>' + (nd ? '<b>' + dias[d.getDay()] + ' ' + pgFecha(f[0]) + '</b><div class="pgsd">' + porDia[f[0]] + ' folios</div>' : '') + '</td><td>' + esc(f[1] || '—') + '</td><td>' + esc(f[2] || '—') + '</td><td>' + esc(f[3]) + '</td><td>' + esc(f[4]) + '</td><td>' + cl[0] + (cl[0] === 'Empresarial' ? ' ×' + fe : '') + '</td></tr>';
+  h += '<div class="pfsum"><div class="pfk"><span>Folios</span><b>' + L.length + '</b><small>' + Object.keys(porDia).length + ' días con folios</small></div>' +
+    '<div class="pfk"><span>Para la meta</span><b>' + pgOrd(meta) + '</b><small>' + (t.metas ? 'metas ' + t.metas.join(' / ') : 'órdenes que cuentan') + '</small></div>' +
+    '<div class="pfk ' + (o.tot ? 'ok' : 'no') + '"><span>Bono de la semana</span><b>' + (o.tot ? pgMoney(o.tot) : '$0') + '</b><small>' + (o.motoFol ? o.motoFol + ' folios de moto' : o.dias + ' días trabajados') + '</small></div></div>';
+  h += '<div class="pfweek">' + days.map(function (x) {
+    var n = porDia[x] || 0, dd = new Date(x + 'T12:00:00');
+    return '<a class="pfd' + (n ? '' : ' z') + (x > PG.corte ? ' fut' : '') + '"' + (n ? ' href="#pf' + x + '"' : '') + '><i style="height:' + Math.max(4, Math.round(n / mx * 46)) + 'px"></i><b>' + (x > PG.corte ? '·' : n) + '</b><span>' + DN[dd.getDay()].slice(0, 3) + ' ' + dd.getDate() + '</span></a>';
+  }).join('') + '</div>';
+  if (L.length) {
+    var tot = L.length;
+    h += '<div class="pfmix"><div class="pfbar">' + ['Residencial', 'Mantenimiento', 'Empresarial'].map(function (k) { return cnt[k] ? '<i class="c' + k.charAt(0) + '" style="width:' + (cnt[k] / tot * 100) + '%"></i>' : ''; }).join('') + '</div><div class="pflg">' +
+      '<span><i class="cR"></i>Residencial <b>' + cnt.Residencial + '</b></span><span><i class="cM"></i>Mantenimiento <b>' + cnt.Mantenimiento + '</b></span><span><i class="cE"></i>Empresarial <b>' + cnt.Empresarial + '</b> <small>(cuentan ×' + fe + ')</small></span></div></div>';
+    var by = {}; L.forEach(function (f) { (by[f[0]] || (by[f[0]] = [])).push(f); });
+    Object.keys(by).sort().forEach(function (x) {
+      var dd = new Date(x + 'T12:00:00');
+      h += '<div class="pfday" id="pf' + x + '"><div class="pfdh"><b>' + DN[dd.getDay()] + ' ' + pgFecha(x) + '</b><span>' + by[x].length + ' folio' + (by[x].length > 1 ? 's' : '') + '</span></div>';
+      by[x].forEach(function (f) {
+        var cl = pgCls(f[5])[0];
+        h += '<div class="pfr"><div class="pft"><b>' + esc(f[3] || '—') + '</b><span>' + esc(f[4] || '') + '</span></div><div class="pfid"><span>OS</span>' + esc(f[1] || '—') + '<span>OT</span>' + esc(f[2] || '—') + '</div><div class="pfc c' + cl.charAt(0) + '">' + cl + (cl === 'Empresarial' ? ' ×' + fe : '') + '</div></div>';
+      });
+      h += '</div>';
     });
-    h += '</tbody></table></div>';
-  }
-  h += '<div class="how">Folios de la hoja Cierre Iguala con fecha de término en la semana. Si falta un folio o hay uno que no es de esta cuadrilla, avísanos.</div></div>';
+  } else h += '<div class="note a">No hay folios de esta cuadrilla en esta semana.</div>';
+  h += '<div class="how">Folios con fecha de término en la semana (hoja Cierre Iguala). Si falta un folio o hay uno que no es de esta cuadrilla, avísanos.</div></div>';
   openMo(h);
+  var mo = document.getElementById('mo');
+  Array.prototype.forEach.call(mo.querySelectorAll('.pfd[href]'), function (a) { a.onclick = function (e) { e.preventDefault(); var el = document.getElementById(a.getAttribute('href').slice(1)); if (el) mo.scrollTo({ top: el.offsetTop - 70, behavior: 'smooth' }); }; });
 }
