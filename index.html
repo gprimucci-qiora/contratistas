@@ -325,6 +325,7 @@ span.idot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-rig
 .pgseg{display:flex;background:var(--g1);border-radius:10px;padding:3px;margin-bottom:8px}.pgseg button{flex:1;border:none;background:transparent;border-radius:8px;padding:8px 6px;font-weight:700;font-size:12.5px;color:var(--g5)}.pgseg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .pgsd{font-size:11px;font-weight:500;color:var(--g4);margin-top:2px;white-space:nowrap}.pgop{opacity:.5}td.pgz{color:var(--red)}.pgrv{text-align:center;width:64px}.pgrv input{width:18px;height:18px;accent-color:var(--red)}
 table.pgt td.nm a{color:var(--ink);text-decoration:none;font-weight:700}table.pgt td.nm a:hover{color:var(--qg);text-decoration:underline}
+td.pgck{cursor:pointer}td.pgck:hover{background:var(--qg-lt)}tr.pgck{cursor:pointer}tr.pgck:hover td{background:var(--qg-lt)}tr.pgck a{color:var(--qg);font-weight:700;text-decoration:none}tr.pgday td{border-top:2px solid var(--g2)}.pgback{border:1px solid var(--g2);background:#fff;border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;margin-bottom:12px}
 .pgrg{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.pgrc{background:#fff;border:1px solid var(--g2);border-radius:14px;padding:14px 16px}.pgrt{font-weight:800;font-size:14px;margin-bottom:8px}.pgrc ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55}.pgrc table.tt{width:100%;font-size:13.5px}.pgrc table.tt th{font-size:11px;color:var(--g4);text-align:left;font-weight:700}.pgrc table.tt th.r{text-align:right}
 .pgcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .pgvb textarea{width:100%;box-sizing:border-box;border:1px solid var(--g2);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical}.pgl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
@@ -487,7 +488,7 @@ self.onmessage = function (e) {
       tec[r[iU]] = { nombre: r[iN], sucursal: String(r[iS] || ''), contratista: String(r[iC] || ''), tipo: r[iT] }; }
     post('Leyendo cierre…');
     var C = XLSX.utils.sheet_to_json(wb.Sheets['Cierre Iguala'], { header: 1, raw: true });
-    var hd = C[0], iF = hd.indexOf('Fecha Termino'), iP = hd.indexOf('Usuario para pago'), iSv = hd.indexOf('Servicio');
+    var hd = C[0], iF = hd.indexOf('Fecha Termino'), iP = hd.indexOf('Usuario para pago'), iSv = hd.indexOf('Servicio'), iOS = hd.indexOf('OS'), iOT = hd.indexOf('OT'), iTp = hd.indexOf('Tipo'), iSt = hd.indexOf('SubTipo'), fol = {};
     var rows = [], sinTec = {}, months = {};
     for (var j = 1; j < C.length; j++) { var x = C[j]; if (!x) continue; var f = x[iF]; if (!(f instanceof Date)) continue;
       var u = x[iP]; var t = tec[u];
@@ -496,10 +497,11 @@ self.onmessage = function (e) {
       if (!t) { sinTec[u] = (sinTec[u] || 0) + 1; continue; }
       months[key.slice(0, 7)] = 1;
       rows.push([u, key, x[iSv]]);
+      if (String(t.contratista || '').trim().toUpperCase() === 'INTERNO') (fol[u] || (fol[u] = [])).push([key, x[iOS] == null ? '' : String(x[iOS]), x[iOT] == null ? '' : String(x[iOT]), x[iTp] || '', x[iSt] || '', x[iSv] || '']);
     }
     post('Leyendo bonos de internas…');
     var pago = null; try { pago = leerPago(wb); } catch (er) { pago = { error: er.message }; }
-    self.postMessage({ ok: true, rows: rows, tec: tec, months: Object.keys(months).sort(), sinTec: sinTec, pago: pago });
+    self.postMessage({ ok: true, rows: rows, tec: tec, months: Object.keys(months).sort(), sinTec: sinTec, pago: pago, fol: fol });
   } catch (err) { self.postMessage({ ok: false, error: err.message }); }
 };
 function post(m) { self.postMessage({ progress: m }); }

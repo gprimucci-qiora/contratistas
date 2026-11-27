@@ -252,6 +252,12 @@ function pgCompute() {
     var tn = String(a.tec || a.u).replace(/\s+/g, ' ').trim(); if (x.tecs.indexOf(tn) < 0) x.tecs.push(tn);
     sem.forEach(function (s, j) { x.m[j] += a.m[s.n] || 0; });
   });
+  var FO = DATA.fol || {};
+  Object.keys(D).forEach(function (k) { D[k].tecs.forEach(function (t) {
+    t.f = sem.map(function () { return []; });
+    t.u.forEach(function (u) { (FO[u] || []).forEach(function (f) { for (var j = 0; j < sem.length; j++) if (f[0] >= sem[j].ini && f[0] <= sem[j].fin) { t.f[j].push(f); break; } }); });
+    t.f.forEach(function (L) { L.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }); });
+  }); });
   var out = Object.keys(D).map(function (k) {
     var g = D[k];
     g.tecs = g.tecs.filter(function (t) { return t.w.some(function (o) { return o.dias || o.tot || o.motoFol; }); });
@@ -298,12 +304,13 @@ function pgRender(c) {
   S.forEach(function (s, j) { h += '<div class="ac' + (s.abierta ? ' pgop' : '') + '"><div class="g">' + pgMoney(c.semTot[j]) + '</div><b>Semana ' + s.n + '</b><span>' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + (s.abierta ? ' · en curso, no entra al total' : '') + '</span></div>'; });
   h += '<div class="ac ok"><div class="g">' + pgMoney(c.total) + '</div><b>Total a pagar</b><span>' + pgSemTxt().split(' · ')[0] + '</span></div></div></div>';
   h += pgReglas(c, hasM);
-  h += '<div class="blk"><div class="blk-h"><span class="t">Bono por cuadrilla</span><span class="s">Clic en el nombre para ver el detalle de cada semana</span></div><div class="tw2"><table class="rs pgt"><thead><tr><th>Cuadrilla</th>' + pgTh() + '<th class="r">Total</th><th class="pgrv">Revisar</th></tr></thead><tbody>';
+  h += '<div class="blk"><div class="blk-h"><span class="t">Bono por cuadrilla</span><span class="s">Clic en el nombre para ver su detalle · clic en una semana para ver sus folios</span></div><div class="tw2"><table class="rs pgt"><thead><tr><th>Cuadrilla</th>' + pgTh() + '<th class="r">Total</th><th class="pgrv">Revisar</th></tr></thead><tbody>';
   c.tecs.forEach(function (t, i) {
     h += '<tr><td class="nm"><a href="javascript:void 0" onclick="pgTec(' + i + ')">' + esc(titleName(t.nombre)) + '</a><div class="pgsd">' + esc(t.u.join(' · ')) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></td>';
     t.w.forEach(function (o, j) {
       var sub = o.motoFol ? o.motoFol + ' folios' : o.dias ? o.dias + ' días · ' + pgOrd(o.ordM) + ' órd.' : 'no trabajó';
-      h += '<td class="r' + (S[j].abierta ? ' pgop' : '') + (!o.tot && o.dias ? ' pgz' : '') + '">' + (o.tot ? pgMoney(o.tot) : '—') + '<div class="pgsd">' + sub + '</div></td>';
+      var ck = t.f && t.f[j] && t.f[j].length;
+      h += '<td class="r' + (S[j].abierta ? ' pgop' : '') + (!o.tot && o.dias ? ' pgz' : '') + (ck ? ' pgck" onclick="pgFol(' + i + ',' + j + ')" title="Ver folios de la semana' : '') + '">' + (o.tot ? pgMoney(o.tot) : '—') + '<div class="pgsd">' + sub + '</div></td>';
     });
     h += '<td class="r"><b>' + (t.total ? pgMoney(t.total) : '—') + '</b></td><td class="pgrv"><input type="checkbox" id="pgrv' + i + '" aria-label="Revisar"></td></tr>';
   });
@@ -328,11 +335,13 @@ function pgTec(i) {
     (t.metas ? '<div class="k"><div class="l">Metas por semana</div><div class="v">' + t.metas.join(' / ') + '</div><div class="s">órdenes: base / media / alta</div></div>' : '') + '</div>';
   h += '<div class="tw2"><table class="rs"><thead><tr><th>Semana</th>' + (hasD ? '<th class="r">Días</th><th class="r">Órdenes</th><th class="r">Para la meta</th><th class="r">Arriba de meta</th><th class="r">Bono base</th><th class="r">Adicional</th><th class="r">Descuento</th>' : '') + (hasM ? '<th class="r">Folios moto</th><th class="r">Pago moto</th>' : '') + '<th class="r">Total</th></tr></thead><tbody>';
   t.w.forEach(function (o, j) {
-    h += '<tr' + (S[j].abierta ? ' class="pgop"' : '') + '><td>Sem ' + S[j].n + '<div class="pgsd">' + pgFecha(S[j].ini) + ' – ' + pgFecha(S[j].fin) + (S[j].abierta ? ' · en curso' : '') + '</div></td>' +
+    var ck = t.f && t.f[j] && t.f[j].length;
+    h += '<tr class="' + (S[j].abierta ? 'pgop' : '') + (ck ? ' pgck" onclick="pgFol(' + i + ',' + j + ')' : '') + '"><td>' + (ck ? '<a href="javascript:void 0">Sem ' + S[j].n + ' ›</a>' : 'Sem ' + S[j].n) + '<div class="pgsd">' + pgFecha(S[j].ini) + ' – ' + pgFecha(S[j].fin) + (S[j].abierta ? ' · en curso' : '') + '</div></td>' +
       (hasD ? '<td class="r' + (o.dias && o.dias <= 5 ? ' bad' : '') + '">' + o.dias + '</td><td class="r">' + o.ord + '</td><td class="r">' + pgOrd(o.ordM) + '</td><td class="r">' + (o.extra || '—') + '</td><td class="r">' + (o.base ? pgMoney(o.base) : '—') + '</td><td class="r">' + (o.adic ? pgMoney(o.adic) : '—') + '</td><td class="r' + (o.desc ? ' bad' : '') + '">' + (o.desc ? pgMoney(o.desc) : '—') + '</td>' : '') +
       (hasM ? '<td class="r">' + (o.motoFol || '—') + '</td><td class="r">' + (o.moto ? pgMoney(o.moto) : '—') + '</td>' : '') + '<td class="r"><b>' + (o.tot ? pgMoney(o.tot) : '—') + '</b></td></tr>';
   });
   h += '</tbody></table></div>';
+  h += '<div class="how">Clic en una semana para ver sus folios.</div>';
   if (hasD) h += '<div class="how">Para la meta = órdenes residenciales + mantenimiento + empresariales × ' + ((c.regla && c.regla.fe) || 1.5) + '. Días en rojo: ' + pgDescTxt(c.regla) + '.</div>';
   h += '</div>';
   openMo(h);
@@ -355,7 +364,7 @@ function pgTag() { var S = PG.semanas.filter(function (s) { return !s.abierta; }
 function pgFile(c) { return 'Pago_internas_' + slug(c.nombre) + '_' + pgTag() + '.html'; }
 function pgExport(c) {
   var css = document.querySelector('style').textContent;
-  var fns = [esc, titleName, pgMoney, pgFecha, pgOrd, pgDescTxt, pgReglas, pgCur, pgSemTxt, pgTh, pgRender, pgTec, pgMsg, pgCopy, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
+  var fns = [esc, titleName, pgMoney, pgFecha, pgOrd, pgCls, pgFol, pgDescTxt, pgReglas, pgCur, pgSemTxt, pgTh, pgRender, pgTec, pgMsg, pgCopy, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
   var data = 'var INI=0;var PG=' + JSON.stringify({ corte: PG.corte, semanas: PG.semanas, distritos: [c], vig: PG.vig, motos: PG.motos, auxR: PG.auxR }).replace(/</g, '\\u003c') + ';';
   var js = data + '\n' + fns + '\nfunction $(id){return document.getElementById(id)}\n' +
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});document.getElementById("inview").innerHTML=pgRender(pgCur());';
@@ -409,3 +418,33 @@ function pgRange() {
 }
 document.getElementById('pgA').onchange = pgRange;
 document.getElementById('pgB').onchange = pgRange;
+
+// Drill down: folios de una cuadrilla en una semana (hoja Cierre Iguala)
+function pgCls(sv) {
+  var x = String(sv || '').toUpperCase();
+  if (x === 'MANTENIMIENTO MAYOR' || x === 'MANTENIMIENTO') return ['Mantenimiento', 1];
+  if (x === 'SOPORTE EMPRESARIAL' || x === 'INSTALACION EMPRESARIAL') return ['Empresarial', 0];
+  return ['Residencial', 1];
+}
+function pgFol(i, j) {
+  var c = pgCur(), t = c.tecs[i], s = PG.semanas[j], o = t.w[j], L = (t.f && t.f[j]) || [], fe = (c.regla && c.regla.fe) || 1.5;
+  var dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], cnt = { Residencial: 0, Mantenimiento: 0, Empresarial: 0 }, porDia = {};
+  L.forEach(function (f) { cnt[pgCls(f[5])[0]]++; porDia[f[0]] = (porDia[f[0]] || 0) + 1; });
+  var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + ' · Semana ' + s.n + '</div><div class="st">' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + ' · ' + esc(t.u.join(' · ')) + ' · ' + esc(c.nombre) + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb">';
+  h += '<button class="pgback" onclick="pgTec(' + i + ')">‹ Todas las semanas</button>';
+  h += '<div class="kp"><div class="k"><div class="l">Folios</div><div class="v">' + L.length + '</div><div class="s">' + Object.keys(porDia).length + ' días con folios</div></div>' +
+    '<div class="k"><div class="l">Para la meta</div><div class="v">' + pgOrd(cnt.Residencial + cnt.Mantenimiento + cnt.Empresarial * fe) + '</div><div class="s">' + cnt.Residencial + ' resid. · ' + cnt.Mantenimiento + ' mant. · ' + cnt.Empresarial + ' empr. ×' + fe + '</div></div>' +
+    '<div class="k ' + (o.tot ? 'good' : 'bad') + '"><div class="l">Bono de la semana</div><div class="v">' + (o.tot ? pgMoney(o.tot) : '$0') + '</div><div class="s">' + (o.motoFol ? o.motoFol + ' folios de moto' : o.dias + ' días trabajados') + '</div></div></div>';
+  if (!L.length) h += '<div class="note a">No hay folios de esta cuadrilla en esta semana.</div>';
+  else {
+    h += '<div class="tw2"><table class="rs"><thead><tr><th>Día</th><th>OS</th><th>OT</th><th>Tipo</th><th>Subtipo</th><th>Cuenta como</th></tr></thead><tbody>';
+    var prev = '';
+    L.forEach(function (f) {
+      var d = new Date(f[0] + 'T12:00:00'), cl = pgCls(f[5]), nd = f[0] !== prev; prev = f[0];
+      h += '<tr' + (nd ? ' class="pgday"' : '') + '><td>' + (nd ? '<b>' + dias[d.getDay()] + ' ' + pgFecha(f[0]) + '</b><div class="pgsd">' + porDia[f[0]] + ' folios</div>' : '') + '</td><td>' + esc(f[1] || '—') + '</td><td>' + esc(f[2] || '—') + '</td><td>' + esc(f[3]) + '</td><td>' + esc(f[4]) + '</td><td>' + cl[0] + (cl[0] === 'Empresarial' ? ' ×' + fe : '') + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '<div class="how">Folios de la hoja Cierre Iguala con fecha de término en la semana. Si falta un folio o hay uno que no es de esta cuadrilla, márcala en "Revisar" y anótalo en observaciones.</div></div>';
+  openMo(h);
+}
