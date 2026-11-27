@@ -144,6 +144,9 @@ function inSide() {
     '<button class="nv' + (INI < 0 ? ' on' : '') + '" onclick="inPick(-1)">▦ ' + (pago ? 'Pago por distrito' : 'Resumen por distrito') + '</button>';
   document.getElementById('innv').innerHTML = h;
   document.getElementById('inmesbox').style.display = pago ? 'none' : '';
+  document.getElementById('pgsembox').style.display = pago && !PG.error ? '' : 'none';
+  if (pago && !PG.error) { var op = PG.avail.map(function (w, i) { return '<option value="' + i + '">Sem ' + w.n + ' · ' + pgFecha(w.ini) + ' – ' + pgFecha(w.fin) + (w.abierta ? ' (en curso)' : '') + '</option>'; }).join('');
+    var sa = document.getElementById('pgA'), sb = document.getElementById('pgB'); sa.innerHTML = op; sb.innerHTML = op; sa.value = PGR.a; sb.value = PGR.b; }
   var L = pago ? (PG.distritos || []) : IN.distritos;
   document.getElementById('inlist').innerHTML = L.map(function (c, i) {
     var sub = pago ? '<span>' + c.conBono + ' de ' + c.tecs.length + ' con bono</span><span class="sem"><b>' + pgMoney(c.total) + '</b></span>' :
@@ -208,7 +211,7 @@ document.getElementById('inChg').onclick = function () { location.reload(); };
 // ===== Preview de pago (pestaña 3, modo "Preview de pago") =====
 // Bono semanal de internas tal cual lo calcula el archivo de bonos (hojas Detalle de servicios, Motos y Auxiliares).
 // No se recalcula: es para que cada distrital coteje y dé visto bueno al pago de sus cuadrillas.
-var INM = 'prod', PG = null;
+var INM = 'prod', PG = null, PGR = null;
 function pgMoney(n) { n = Math.round(n || 0); return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US'); }
 function pgFecha(k) { return (+k.slice(8, 10)) + ' ' + ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][+k.slice(5, 7) - 1]; }
 function pgCur() { return PG.distritos[INI]; }
@@ -216,20 +219,26 @@ function pgCompute() {
   var P = DATA.pago;
   if (!P || P.error || !P.det) return { error: P && P.error ? P.error : 'El archivo no trae la hoja "Detalle de servicios" con el bono de internas.' };
   var corte = ''; DATA.rows.forEach(function (r) { if (r[1] > corte) corte = r[1]; });
-  var idx = [], sem = [];
-  P.semanas.forEach(function (s, i) { if (s.ini && s.ini <= corte) { idx.push(i); sem.push({ n: s.n, ini: s.ini, fin: s.fin, abierta: s.fin > corte }); } });
+  var avail = [];
+  P.semanas.forEach(function (s, i) { if (s.ini && s.ini <= corte) avail.push({ i: i, n: s.n, ini: s.ini, fin: s.fin, abierta: s.fin > corte }); });
+  if (!avail.length) return { error: 'El archivo no trae semanas de bono con datos.' };
+  var cerr = avail.filter(function (s) { return !s.abierta; }).length;
+  if (!PGR || PGR.b >= avail.length || PGR.a > PGR.b) PGR = { a: 0, b: Math.max(0, (cerr || avail.length) - 1) };
+  var pick = avail.slice(PGR.a, PGR.b + 1), idx = pick.map(function (s) { return s.i; }), sem = pick.map(function (s) { return { n: s.n, ini: s.ini, fin: s.fin, abierta: s.abierta }; });
+  var RG = P.reglas || { suc: {} };
   function isInt(u, ctr) { var t = DATA.tec[u], c = t ? t.contratista : ctr; return String(c || '').trim().toUpperCase() === 'INTERNO'; }
   var D = {};
   function get(u, suc, nom, tipo) {
-    var dd = inDist(suc), k = inNorm(nom || u), g = D[dd.k] || (D[dd.k] = { dist: dd.k, nombre: dd.n, map: {}, tecs: [], auxM: {} }), t = g.map[k];
-    if (!t) { t = g.map[k] = { nombre: String(nom || u).replace(/\s+/g, ' ').trim(), u: [], tipo: tipo || '', metas: null, w: sem.map(function () { return { dias: 0, ord: 0, extra: 0, base: 0, adic: 0, desc: 0, motoFol: 0, moto: 0, tot: 0 }; }) }; g.tecs.push(t); }
+    var dd = inDist(suc), k = inNorm(nom || u), g = D[dd.k] || (D[dd.k] = { dist: dd.k, nombre: dd.n, map: {}, tecs: [], auxM: {}, regla: RG.suc[String(suc || '').trim()] || null }), t = g.map[k];
+    if (!g.regla && RG.suc[String(suc || '').trim()]) g.regla = RG.suc[String(suc || '').trim()];
+    if (!t) { t = g.map[k] = { nombre: String(nom || u).replace(/\s+/g, ' ').trim(), u: [], tipo: tipo || '', metas: null, w: sem.map(function () { return { dias: 0, ord: 0, ordM: 0, extra: 0, base: 0, adic: 0, desc: 0, motoFol: 0, moto: 0, tot: 0 }; }) }; g.tecs.push(t); }
     if (t.u.indexOf(u) < 0) t.u.push(u);
     return t;
   }
   P.det.forEach(function (x) {
     if (!isInt(x.u, x.ctr)) return;
     var t = get(x.u, x.suc, x.nom, x.tipo); if (x.metas && x.metas[0]) t.metas = x.metas;
-    idx.forEach(function (i, j) { var a = x.w[i], o = t.w[j]; o.dias += a[0]; o.ord += a[1]; o.extra += a[2]; o.base += a[3]; o.adic += a[4]; o.desc += a[5]; o.tot += a[6]; });
+    idx.forEach(function (i, j) { var a = x.w[i], o = t.w[j]; o.dias += a[0]; o.ord += a[1]; o.ordM += a[7] || 0; o.extra += a[2]; o.base += a[3]; o.adic += a[4]; o.desc += a[5]; o.tot += a[6]; });
   });
   Object.keys(P.motos || {}).forEach(function (u) {
     var tt = DATA.tec[u]; if (!tt || !isInt(u)) return;
@@ -256,7 +265,7 @@ function pgCompute() {
     return g;
   }).filter(function (g) { return g.tecs.length; });
   out.sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
-  return { corte: corte, semanas: sem, distritos: out };
+  return { corte: corte, avail: avail, semanas: sem, distritos: out, vig: RG.vig || null, motos: RG.motos || null, auxR: RG.aux || null };
 }
 function pgSemTxt() {
   var S = PG.semanas.filter(function (s) { return !s.abierta; });
@@ -288,11 +297,12 @@ function pgRender(c) {
   h += '<div class="blk"><div class="blk-h"><span class="t">Total por semana</span><span class="s">' + c.tecs.length + ' cuadrillas' + (c.aux.length ? ' · ' + c.aux.length + ' auxiliares' : '') + '</span></div><div class="pgcards">';
   S.forEach(function (s, j) { h += '<div class="ac' + (s.abierta ? ' pgop' : '') + '"><div class="g">' + pgMoney(c.semTot[j]) + '</div><b>Semana ' + s.n + '</b><span>' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + (s.abierta ? ' · en curso, no entra al total' : '') + '</span></div>'; });
   h += '<div class="ac ok"><div class="g">' + pgMoney(c.total) + '</div><b>Total a pagar</b><span>' + pgSemTxt().split(' · ')[0] + '</span></div></div></div>';
+  h += pgReglas(c, hasM);
   h += '<div class="blk"><div class="blk-h"><span class="t">Bono por cuadrilla</span><span class="s">Clic en el nombre para ver el detalle de cada semana</span></div><div class="tw2"><table class="rs pgt"><thead><tr><th>Cuadrilla</th>' + pgTh() + '<th class="r">Total</th><th class="pgrv">Revisar</th></tr></thead><tbody>';
   c.tecs.forEach(function (t, i) {
     h += '<tr><td class="nm"><a href="javascript:void 0" onclick="pgTec(' + i + ')">' + esc(titleName(t.nombre)) + '</a><div class="pgsd">' + esc(t.u.join(' · ')) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></td>';
     t.w.forEach(function (o, j) {
-      var sub = o.motoFol ? o.motoFol + ' folios' : o.dias ? o.dias + ' días · ' + o.ord + ' órd.' : 'no trabajó';
+      var sub = o.motoFol ? o.motoFol + ' folios' : o.dias ? o.dias + ' días · ' + pgOrd(o.ordM) + ' órd.' : 'no trabajó';
       h += '<td class="r' + (S[j].abierta ? ' pgop' : '') + (!o.tot && o.dias ? ' pgz' : '') + '">' + (o.tot ? pgMoney(o.tot) : '—') + '<div class="pgsd">' + sub + '</div></td>';
     });
     h += '<td class="r"><b>' + (t.total ? pgMoney(t.total) : '—') + '</b></td><td class="pgrv"><input type="checkbox" id="pgrv' + i + '" aria-label="Revisar"></td></tr>';
@@ -304,10 +314,6 @@ function pgRender(c) {
     c.aux.forEach(function (a) { h += '<tr><td class="nm">' + esc(titleName(a.nombre)) + '<div class="pgsd">con ' + esc(a.tecs.map(titleName).join(', ')) + '</div></td>' + a.m.map(function (v, j) { return '<td class="r' + (S[j].abierta ? ' pgop' : '') + '">' + (v ? pgMoney(v) : '—') + '</td>'; }).join('') + '<td class="r"><b>' + pgMoney(a.total) + '</b></td></tr>'; });
     h += '</tbody></table></div></div>';
   }
-  h += '<div class="blk"><div class="blk-h"><span class="t">Cómo se calcula</span></div><div class="how" style="margin:0">' +
-    'Cada semana (lunes a domingo) se cuentan las órdenes de la cuadrilla contra las metas de su distrito' + (c.tecs[0] && c.tecs[0].metas ? ' (' + c.tecs.filter(function (t) { return t.metas; })[0].metas.join(' / ') + ' órdenes: base / media / alta)' : '') + '. ' +
-    'Según la meta que alcanza gana el bono base, medio o alto, y cada orden arriba de la meta alta suma un adicional. ' +
-    'Si trabajó 5 días en la semana el bono baja a la mitad y con 4 días o menos no hay bono.' + (hasM ? ' Motos: pago por folios de la semana.' : '') + (c.aux.length ? ' Auxiliares: bono por las semanas que el técnico con quien trabaja llega a su meta.' : '') + '</div></div>';
   h += '<div class="blk pgvb"><div class="blk-h"><span class="t">Visto bueno del distrital</span><span class="s">Responde por WhatsApp o correo</span></div>' +
     '<label class="pgl">Observaciones (si algo no cuadra)</label><textarea id="pgObs" rows="3" placeholder="Ej. Juan Pérez sí trabajó el sábado 8, le faltan órdenes en la semana 45"></textarea>' +
     '<div class="pgbtns"><button onclick="pgCopy(true)">✓ Copiar visto bueno</button><button class="sec" onclick="pgCopy(false)">Copiar observaciones</button><span id="pgOk"></span></div>' +
@@ -320,14 +326,14 @@ function pgTec(i) {
   var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + '</div><div class="st">' + esc(t.u.join(' · ')) + ' · ' + esc(c.nombre) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb">';
   h += '<div class="kp"><div class="k good"><div class="l">Total a pagar</div><div class="v">' + pgMoney(t.total) + '</div><div class="s">' + pgSemTxt().split(' · ')[0] + '</div></div>' +
     (t.metas ? '<div class="k"><div class="l">Metas por semana</div><div class="v">' + t.metas.join(' / ') + '</div><div class="s">órdenes: base / media / alta</div></div>' : '') + '</div>';
-  h += '<div class="tw2"><table class="rs"><thead><tr><th>Semana</th>' + (hasD ? '<th class="r">Días</th><th class="r">Órdenes</th><th class="r">Arriba de meta</th><th class="r">Bono base</th><th class="r">Adicional</th><th class="r">Descuento</th>' : '') + (hasM ? '<th class="r">Folios moto</th><th class="r">Pago moto</th>' : '') + '<th class="r">Total</th></tr></thead><tbody>';
+  h += '<div class="tw2"><table class="rs"><thead><tr><th>Semana</th>' + (hasD ? '<th class="r">Días</th><th class="r">Órdenes</th><th class="r">Para la meta</th><th class="r">Arriba de meta</th><th class="r">Bono base</th><th class="r">Adicional</th><th class="r">Descuento</th>' : '') + (hasM ? '<th class="r">Folios moto</th><th class="r">Pago moto</th>' : '') + '<th class="r">Total</th></tr></thead><tbody>';
   t.w.forEach(function (o, j) {
     h += '<tr' + (S[j].abierta ? ' class="pgop"' : '') + '><td>Sem ' + S[j].n + '<div class="pgsd">' + pgFecha(S[j].ini) + ' – ' + pgFecha(S[j].fin) + (S[j].abierta ? ' · en curso' : '') + '</div></td>' +
-      (hasD ? '<td class="r' + (o.dias && o.dias <= 5 ? ' bad' : '') + '">' + o.dias + '</td><td class="r">' + o.ord + '</td><td class="r">' + (o.extra || '—') + '</td><td class="r">' + (o.base ? pgMoney(o.base) : '—') + '</td><td class="r">' + (o.adic ? pgMoney(o.adic) : '—') + '</td><td class="r' + (o.desc ? ' bad' : '') + '">' + (o.desc ? pgMoney(o.desc) : '—') + '</td>' : '') +
+      (hasD ? '<td class="r' + (o.dias && o.dias <= 5 ? ' bad' : '') + '">' + o.dias + '</td><td class="r">' + o.ord + '</td><td class="r">' + pgOrd(o.ordM) + '</td><td class="r">' + (o.extra || '—') + '</td><td class="r">' + (o.base ? pgMoney(o.base) : '—') + '</td><td class="r">' + (o.adic ? pgMoney(o.adic) : '—') + '</td><td class="r' + (o.desc ? ' bad' : '') + '">' + (o.desc ? pgMoney(o.desc) : '—') + '</td>' : '') +
       (hasM ? '<td class="r">' + (o.motoFol || '—') + '</td><td class="r">' + (o.moto ? pgMoney(o.moto) : '—') + '</td>' : '') + '<td class="r"><b>' + (o.tot ? pgMoney(o.tot) : '—') + '</b></td></tr>';
   });
   h += '</tbody></table></div>';
-  if (hasD) h += '<div class="how">Días en rojo: con 5 días el bono baja a la mitad y con 4 o menos no hay bono.</div>';
+  if (hasD) h += '<div class="how">Para la meta = órdenes residenciales + mantenimiento + empresariales × ' + ((c.regla && c.regla.fe) || 1.5) + '. Días en rojo: ' + pgDescTxt(c.regla) + '.</div>';
   h += '</div>';
   openMo(h);
 }
@@ -349,8 +355,8 @@ function pgTag() { var S = PG.semanas.filter(function (s) { return !s.abierta; }
 function pgFile(c) { return 'Pago_internas_' + slug(c.nombre) + '_' + pgTag() + '.html'; }
 function pgExport(c) {
   var css = document.querySelector('style').textContent;
-  var fns = [esc, titleName, pgMoney, pgFecha, pgCur, pgSemTxt, pgTh, pgRender, pgTec, pgMsg, pgCopy, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
-  var data = 'var INI=0;var PG=' + JSON.stringify({ corte: PG.corte, semanas: PG.semanas, distritos: [c] }).replace(/</g, '\\u003c') + ';';
+  var fns = [esc, titleName, pgMoney, pgFecha, pgOrd, pgDescTxt, pgReglas, pgCur, pgSemTxt, pgTh, pgRender, pgTec, pgMsg, pgCopy, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
+  var data = 'var INI=0;var PG=' + JSON.stringify({ corte: PG.corte, semanas: PG.semanas, distritos: [c], vig: PG.vig, motos: PG.motos, auxR: PG.auxR }).replace(/</g, '\\u003c') + ';';
   var js = data + '\n' + fns + '\nfunction $(id){return document.getElementById(id)}\n' +
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});document.getElementById("inview").innerHTML=pgRender(pgCur());';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -365,3 +371,41 @@ function inMode(m) {
   if (cur) { var L = m === 'pago' ? (PG.distritos || []) : IN.distritos; for (var i = 0; i < L.length; i++) if (L[i].dist === cur.dist) INI = i; }
   inDraw(); window.scrollTo(0, 0);
 }
+
+function pgOrd(n) { n = Math.round(n * 10) / 10; return n % 1 ? n.toFixed(1) : String(n); }
+function pgDescTxt(r) {
+  var d = r && r.desc && r.desc.length ? r.desc : [[5, 0.5], [4, 1]];
+  return d.map(function (x, i) { return (i === d.length - 1 ? 'con ' + x[0] + ' días o menos ' : 'con ' + x[0] + ' días ') + (x[1] >= 1 ? 'no hay bono' : 'el bono baja ' + Math.round(x[1] * 100) + '%'); }).join(' y ');
+}
+function pgReglas(c, hasM) {
+  var r = c.regla, h = '<div class="blk"><div class="blk-h"><span class="t">Reglas y montos de la semana</span><span class="s">' + (PG.vig ? 'Vigentes desde el ' + pgFecha(PG.vig) + ' · ' : '') + 'aplican igual a cada semana</span></div><div class="pgrg">';
+  if (r) {
+    var lv = ['Meta base', 'Meta media', 'Meta alta'];
+    h += '<div class="pgrc"><div class="pgrt">Bono por semana (lunes a domingo)</div><table class="tt"><tr><th></th><th class="r">Órdenes</th><th class="r">Bono</th></tr>' +
+      lv.map(function (l, i) { return '<tr><td>' + l + '</td><td class="r">' + r.metas[i] + ' o más</td><td class="r"><b>' + pgMoney(r.bonos[i]) + '</b></td></tr>'; }).join('') +
+      '<tr><td>Menos de ' + r.metas[0] + '</td><td class="r">—</td><td class="r">Sin bono</td></tr></table></div>';
+    h += '<div class="pgrc"><div class="pgrt">Extras y descuentos</div><ul>' +
+      '<li><b>+' + pgMoney(r.adic) + '</b> por cada orden arriba de ' + r.metas[2] + '.</li>' +
+      '<li>Las órdenes <b>empresariales cuentan ×' + r.fe + '</b> para llegar a la meta.</li>' +
+      '<li>Faltas: ' + pgDescTxt(r) + '.</li></ul></div>';
+  }
+  if (hasM && PG.motos && PG.motos.tramos.length) {
+    var T = PG.motos.tramos;
+    h += '<div class="pgrc"><div class="pgrt">Motos (pago por folio)</div><table class="tt"><tr><th>Folios en la semana</th><th class="r">Por folio</th></tr>' +
+      T.map(function (t, i) { return '<tr><td>' + (i === T.length - 1 ? t[0] + ' o más' : t[0] + ' a ' + t[1]) + '</td><td class="r">' + (t[2] ? '<b>' + pgMoney(t[2]) + '</b>' : 'Sin pago') + '</td></tr>'; }).join('') +
+      '</table>' + (PG.motos.tope ? '<div class="pgsd" style="white-space:normal;margin-top:6px">Tope: ' + pgMoney(PG.motos.tope) + ' por semana.</div>' : '') + '</div>';
+  }
+  if (c.aux.length && PG.auxR) h += '<div class="pgrc"><div class="pgrt">Auxiliares</div><ul><li>El auxiliar gana <b>' + pgMoney(PG.auxR.bono / 4) + '</b> por cada semana que su técnico gana el bono de <b>' + pgMoney(PG.auxR.tope) + '</b>.</li></ul></div>';
+  if (!r) h += '<div class="pgrc"><div class="pgrt">Bono por semana</div><ul><li>Según la meta de órdenes que alcanza la cuadrilla en la semana (base, media o alta).</li><li>Faltas: ' + pgDescTxt(null) + '.</li></ul></div>';
+  return h + '</div></div>';
+}
+function pgRange() {
+  var a = +document.getElementById('pgA').value, b = +document.getElementById('pgB').value;
+  if (this && this.id === 'pgA' && a > b) b = a; if (this && this.id === 'pgB' && b < a) a = b;
+  var cur = INI >= 0 && PG.distritos[INI] ? PG.distritos[INI].dist : null;
+  PGR = { a: a, b: b }; PG = pgCompute(); PG._d = DATA; INI = -1;
+  if (cur) PG.distritos.forEach(function (c, i) { if (c.dist === cur) INI = i; });
+  inDraw();
+}
+document.getElementById('pgA').onchange = pgRange;
+document.getElementById('pgB').onchange = pgRange;
