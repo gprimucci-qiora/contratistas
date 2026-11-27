@@ -326,6 +326,7 @@ span.idot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-rig
 .pgsd{font-size:11px;font-weight:500;color:var(--g4);margin-top:2px;white-space:nowrap}.pgop{opacity:.5}td.pgz{color:var(--red)}.pgrv{text-align:center;width:64px}.pgrv input{width:18px;height:18px;accent-color:var(--red)}
 table.pgt td.nm a{color:var(--ink);text-decoration:none;font-weight:700}table.pgt td.nm a:hover{color:var(--qg);text-decoration:underline}
 td.pgck{cursor:pointer}td.pgck:hover{background:var(--qg-lt)}tr.pgck{cursor:pointer}tr.pgck:hover td{background:var(--qg-lt)}tr.pgck a{color:var(--qg);font-weight:700;text-decoration:none}tr.pgday td{border-top:2px solid var(--g2)}.pgback{border:1px solid var(--g2);background:#fff;border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;margin-bottom:12px}
+.pgsk{display:inline-block;background:var(--g1);border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700;white-space:nowrap}td.pgco{font-size:12.5px;color:var(--g5);max-width:190px}
 .pgrg{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.pgrc{background:#fff;border:1px solid var(--g2);border-radius:14px;padding:14px 16px}.pgrt{font-weight:800;font-size:14px;margin-bottom:8px}.pgrc ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55}.pgrc table.tt{width:100%;font-size:13.5px}.pgrc table.tt th{font-size:11px;color:var(--g4);text-align:left;font-weight:700}.pgrc table.tt th.r{text-align:right}
 .pgcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .pgvb textarea{width:100%;box-sizing:border-box;border:1px solid var(--g2);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical}.pgl{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
@@ -522,10 +523,10 @@ function leerPago(wb) {
   if (wr < 0 || dr.length < 2) throw new Error('Detalle de servicios: no encontré las semanas');
   var sem = []; for (var w = 0; typeof A[wr][c.dias + w] === 'number'; w++) sem.push({ n: A[wr][c.dias + w], ini: pD(A[dr[0]][c.dias + w]), fin: pD(A[dr[1]][c.dias + w]) });
   var mr = pRow(A, function (r) { return pCol(r, 'META BASE') >= 0; }), mc = mr >= 0 ? pCol(A[mr], 'META BASE') : -1;
-  var iu = pCol(H, 'USUARIO PARA PAGO'), is = pCol(H, 'SUCURSAL'), inn = pCol(H, 'NOMBRE DEL TECNICO'), it = pCol(H, 'TIPO DE CUADRILLA'), ic = pCol(H, 'CONTRATISTA');
+  var iu = pCol(H, 'USUARIO PARA PAGO'), is = pCol(H, 'SUCURSAL'), inn = pCol(H, 'NOMBRE DEL TECNICO'), it = pCol(H, 'TIPO DE CUADRILLA'), ic = pCol(H, 'CONTRATISTA'), ico = pCol(H, 'COORDINADOR');
   var det = [];
   for (i = h + 1; i < A.length; i++) { var r = A[i]; if (!r || !r[iu]) continue;
-    var x = { u: String(r[iu]).trim(), suc: String(r[is] || ''), nom: String(r[inn] || ''), tipo: String(r[it] || ''), ctr: String(r[ic] || ''), metas: mc >= 0 ? [pN(r[mc]), pN(r[mc + 1]), pN(r[mc + 2])] : null, w: [] };
+    var x = { u: String(r[iu]).trim(), suc: String(r[is] || ''), nom: String(r[inn] || ''), tipo: String(r[it] || ''), ctr: String(r[ic] || ''), coord: ico >= 0 && r[ico] ? String(r[ico]) : '', metas: mc >= 0 ? [pN(r[mc]), pN(r[mc + 1]), pN(r[mc + 2])] : null, w: [] };
     for (w = 0; w < sem.length; w++) x.w.push([pN(r[c.dias + w]), pN(r[c.ord + w]), pN(r[c.extra + w]), pN(r[c.base + w]), pN(r[c.adic + w]), pN(r[c.desc + w]), pN(r[c.tot + w]), pN(r[c.res + w]) + pN(r[c.man + w]) + pN(r[c.emp + w])]);
     det.push(x); }
   var motos = {}, M = wb.Sheets['Motos'];

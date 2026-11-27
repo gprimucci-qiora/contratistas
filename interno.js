@@ -237,7 +237,7 @@ function pgCompute() {
   }
   P.det.forEach(function (x) {
     if (!isInt(x.u, x.ctr)) return;
-    var t = get(x.u, x.suc, x.nom, x.tipo); if (x.metas && x.metas[0]) t.metas = x.metas;
+    var t = get(x.u, x.suc, x.nom, x.tipo); if (x.metas && x.metas[0]) t.metas = x.metas; if (x.coord && !t.coord) t.coord = String(x.coord).replace(/\s+/g, ' ').trim();
     idx.forEach(function (i, j) { var a = x.w[i], o = t.w[j]; o.dias += a[0]; o.ord += a[1]; o.ordM += a[7] || 0; o.extra += a[2]; o.base += a[3]; o.adic += a[4]; o.desc += a[5]; o.tot += a[6]; });
   });
   Object.keys(P.motos || {}).forEach(function (u) {
@@ -264,7 +264,7 @@ function pgCompute() {
     g.aux = Object.keys(g.auxM).map(function (n) { var a = g.auxM[n]; a.total = 0; a.m.forEach(function (v, j) { if (!sem[j].abierta) a.total += v; }); return a; }).filter(function (a) { return a.m.some(Boolean); });
     delete g.auxM; delete g.map;
     g.tecs.forEach(function (t) { t.total = 0; t.w.forEach(function (o, j) { if (!sem[j].abierta) t.total += o.tot; }); });
-    g.tecs.sort(function (a, b) { return titleName(a.nombre).localeCompare(titleName(b.nombre)); });
+    g.tecs.sort(function (a, b) { return a.total - b.total || titleName(a.nombre).localeCompare(titleName(b.nombre)); });
     g.semTot = sem.map(function (s, j) { var v = 0; g.tecs.forEach(function (t) { v += t.w[j].tot; }); g.aux.forEach(function (a) { v += a.m[j]; }); return v; });
     g.total = 0; g.semTot.forEach(function (v, j) { if (!sem[j].abierta) g.total += v; });
     g.conBono = g.tecs.filter(function (t) { return t.total > 0; }).length;
@@ -299,38 +299,34 @@ function pgRender(c) {
   var S = PG.semanas, open = S.some(function (s) { return s.abierta; }), hasM = c.tecs.some(function (t) { return t.w.some(function (o) { return o.motoFol; }); });
   var h = '<div class="pg wide"><div class="pg-h"><div class="ey">Cuadrillas internas · Preview de pago · ' + pgSemTxt() + '</div><h1>' + esc(c.nombre) + '</h1>';
   h += '<div class="meta"><span>Distrito <b>' + c.dist + '</b></span><span>Cuadrillas con bono: <b>' + c.conBono + ' de ' + c.tecs.length + '</b></span><span>Total a pagar: <b>' + pgMoney(c.total) + '</b></span><span>Datos al <b>' + pgFecha(PG.corte) + '</b></span></div></div>';
-  h += '<div class="note a"><b>Preview para revisión, todavía no es el pago final.</b> Revisa que estén todas tus cuadrillas, sus días, sus órdenes y su bono de cada semana. Si algo no cuadra, márcalo en la columna <b>Revisar</b> y explícalo abajo en el visto bueno.</div>';
+  h += '<div class="note a"><b>Preview para revisión, todavía no es el pago final.</b> Revisa que estén todas tus cuadrillas, sus días, sus órdenes y su bono de cada semana. Si algo no cuadra, avísanos con el nombre de la cuadrilla y la semana.</div>';
   h += '<div class="blk"><div class="blk-h"><span class="t">Total por semana</span><span class="s">' + c.tecs.length + ' cuadrillas' + (c.aux.length ? ' · ' + c.aux.length + ' auxiliares' : '') + '</span></div><div class="pgcards">';
   S.forEach(function (s, j) { h += '<div class="ac' + (s.abierta ? ' pgop' : '') + '"><div class="g">' + pgMoney(c.semTot[j]) + '</div><b>Semana ' + s.n + '</b><span>' + pgFecha(s.ini) + ' – ' + pgFecha(s.fin) + (s.abierta ? ' · en curso, no entra al total' : '') + '</span></div>'; });
   h += '<div class="ac ok"><div class="g">' + pgMoney(c.total) + '</div><b>Total a pagar</b><span>' + pgSemTxt().split(' · ')[0] + '</span></div></div></div>';
   h += pgReglas(c, hasM);
-  h += '<div class="blk"><div class="blk-h"><span class="t">Bono por cuadrilla</span><span class="s">Clic en el nombre para ver su detalle · clic en una semana para ver sus folios</span></div><div class="tw2"><table class="rs pgt"><thead><tr><th>Cuadrilla</th>' + pgTh() + '<th class="r">Total</th><th class="pgrv">Revisar</th></tr></thead><tbody>';
+  h += '<div class="blk"><div class="blk-h"><span class="t">Bono por cuadrilla</span><span class="s">Clic en el nombre para ver su detalle · clic en una semana para ver sus folios</span></div><div class="tw2"><table class="rs pgt"><thead><tr><th>Cuadrilla</th><th>Skill</th><th>Coordinador</th>' + pgTh() + '<th class="r">Total</th></tr></thead><tbody>';
   c.tecs.forEach(function (t, i) {
-    h += '<tr><td class="nm"><a href="javascript:void 0" onclick="pgTec(' + i + ')">' + esc(titleName(t.nombre)) + '</a><div class="pgsd">' + esc(t.u.join(' · ')) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></td>';
+    h += '<tr><td class="nm"><a href="javascript:void 0" onclick="pgTec(' + i + ')">' + esc(titleName(t.nombre)) + '</a><div class="pgsd">' + esc(t.u.join(' · ')) + '</div></td><td><span class="pgsk">' + esc(t.tipo || '—') + '</span></td><td class="pgco">' + (t.coord ? esc(titleName(t.coord)) : '—') + '</td>';
     t.w.forEach(function (o, j) {
       var sub = o.motoFol ? o.motoFol + ' folios' : o.dias ? o.dias + ' días · ' + pgOrd(o.ordM) + ' órd.' : 'no trabajó';
       var ck = t.f && t.f[j] && t.f[j].length;
       h += '<td class="r' + (S[j].abierta ? ' pgop' : '') + (!o.tot && o.dias ? ' pgz' : '') + (ck ? ' pgck" onclick="pgFol(' + i + ',' + j + ')" title="Ver folios de la semana' : '') + '">' + (o.tot ? pgMoney(o.tot) : '—') + '<div class="pgsd">' + sub + '</div></td>';
     });
-    h += '<td class="r"><b>' + (t.total ? pgMoney(t.total) : '—') + '</b></td><td class="pgrv"><input type="checkbox" id="pgrv' + i + '" aria-label="Revisar"></td></tr>';
+    h += '<td class="r"><b>' + (t.total ? pgMoney(t.total) : '—') + '</b></td></tr>';
   });
   var tt = 0; c.tecs.forEach(function (t) { tt += t.total; });
-  h += '</tbody><tfoot><tr><td>Total cuadrillas</td>' + S.map(function (s, j) { var v = 0; c.tecs.forEach(function (t) { v += t.w[j].tot; }); return '<td class="r' + (s.abierta ? ' pgop' : '') + '">' + pgMoney(v) + '</td>'; }).join('') + '<td class="r">' + pgMoney(tt) + '</td><td></td></tr></tfoot></table></div></div>';
+  h += '</tbody><tfoot><tr><td colspan="3">Total cuadrillas</td>' + S.map(function (s, j) { var v = 0; c.tecs.forEach(function (t) { v += t.w[j].tot; }); return '<td class="r' + (s.abierta ? ' pgop' : '') + '">' + pgMoney(v) + '</td>'; }).join('') + '<td class="r">' + pgMoney(tt) + '</td></tr></tfoot></table></div></div>';
   if (c.aux.length) {
     h += '<div class="blk"><div class="blk-h"><span class="t">Auxiliares</span><span class="s">Bono del auxiliar por las semanas de sus técnicos</span></div><div class="tw2"><table class="rs"><thead><tr><th>Auxiliar</th>' + pgTh() + '<th class="r">Total</th></tr></thead><tbody>';
     c.aux.forEach(function (a) { h += '<tr><td class="nm">' + esc(titleName(a.nombre)) + '<div class="pgsd">con ' + esc(a.tecs.map(titleName).join(', ')) + '</div></td>' + a.m.map(function (v, j) { return '<td class="r' + (S[j].abierta ? ' pgop' : '') + '">' + (v ? pgMoney(v) : '—') + '</td>'; }).join('') + '<td class="r"><b>' + pgMoney(a.total) + '</b></td></tr>'; });
     h += '</tbody></table></div></div>';
   }
-  h += '<div class="blk pgvb"><div class="blk-h"><span class="t">Visto bueno del distrital</span><span class="s">Responde por WhatsApp o correo</span></div>' +
-    '<label class="pgl">Observaciones (si algo no cuadra)</label><textarea id="pgObs" rows="3" placeholder="Ej. Juan Pérez sí trabajó el sábado 8, le faltan órdenes en la semana 45"></textarea>' +
-    '<div class="pgbtns"><button onclick="pgCopy(true)">✓ Copiar visto bueno</button><button class="sec" onclick="pgCopy(false)">Copiar observaciones</button><span id="pgOk"></span></div>' +
-    '<div class="pgfirma"><div>Nombre del distrital</div><div>Firma</div><div>Fecha</div></div></div>';
   h += '<div class="foot">QiORA Conecta · Cuadrillas internas · Preview de pago de bono para revisión del distrital. Montos tal cual los calcula el archivo de bonos con datos al ' + pgFecha(PG.corte) + '; pueden cambiar si se corrige algo en la revisión.' + (open ? ' La semana en curso no entra al total.' : '') + '</div></div>';
   return h;
 }
 function pgTec(i) {
   var c = pgCur(), t = c.tecs[i], S = PG.semanas, hasM = t.w.some(function (o) { return o.motoFol; }), hasD = t.w.some(function (o) { return o.dias; });
-  var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + '</div><div class="st">' + esc(t.u.join(' · ')) + ' · ' + esc(c.nombre) + (t.tipo ? ' · ' + esc(t.tipo) : '') + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb">';
+  var h = '<div class="mh"><div><div class="t">' + esc(titleName(t.nombre)) + '</div><div class="st">' + esc(t.u.join(' · ')) + ' · ' + esc(c.nombre) + (t.tipo ? ' · ' + esc(t.tipo) : '') + (t.coord ? ' · Coord. ' + esc(titleName(t.coord)) : '') + '</div></div><button class="x" onclick="closeMo()">✕</button></div><div class="mb">';
   h += '<div class="kp"><div class="k good"><div class="l">Total a pagar</div><div class="v">' + pgMoney(t.total) + '</div><div class="s">' + pgSemTxt().split(' · ')[0] + '</div></div>' +
     (t.metas ? '<div class="k"><div class="l">Metas por semana</div><div class="v">' + t.metas.join(' / ') + '</div><div class="s">órdenes: base / media / alta</div></div>' : '') + '</div>';
   h += '<div class="tw2"><table class="rs"><thead><tr><th>Semana</th>' + (hasD ? '<th class="r">Días</th><th class="r">Órdenes</th><th class="r">Para la meta</th><th class="r">Arriba de meta</th><th class="r">Bono base</th><th class="r">Adicional</th><th class="r">Descuento</th>' : '') + (hasM ? '<th class="r">Folios moto</th><th class="r">Pago moto</th>' : '') + '<th class="r">Total</th></tr></thead><tbody>';
@@ -346,25 +342,11 @@ function pgTec(i) {
   h += '</div>';
   openMo(h);
 }
-function pgMsg(ok) {
-  var c = pgCur(), L = [], obs = (document.getElementById('pgObs') || {}).value || '';
-  c.tecs.forEach(function (t, i) { var e = document.getElementById('pgrv' + i); if (e && e.checked) L.push('- ' + titleName(t.nombre) + ' (' + t.u.join(', ') + '): ' + pgMoney(t.total)); });
-  var m = (ok && !L.length ? '✅ Visto bueno' : '⚠️ Revisión') + ' · Pago cuadrillas internas\nDistrito: ' + c.nombre + ' (' + c.dist + ')\n' + pgSemTxt() + '\nTotal: ' + pgMoney(c.total) + ' · ' + c.conBono + ' cuadrillas con bono\n';
-  if (L.length) m += '\nRevisar:\n' + L.join('\n') + '\n';
-  if (obs.trim()) m += '\nObservaciones: ' + obs.trim() + '\n';
-  if (ok && !L.length && !obs.trim()) m += '\nTodo correcto, se puede pagar.';
-  return m;
-}
-function pgCopy(ok) {
-  var m = pgMsg(ok), done = function () { var s = document.getElementById('pgOk'); if (s) { s.textContent = 'Copiado. Pégalo en WhatsApp.'; setTimeout(function () { s.textContent = ''; }, 4000); } };
-  function fb() { var ta = document.createElement('textarea'); ta.value = m; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { prompt('Copia este mensaje:', m); } ta.remove(); }
-  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(m).then(done, fb); else fb();
-}
 function pgTag() { var S = PG.semanas.filter(function (s) { return !s.abierta; }); return 'sem' + (S.length ? S[0].n + (S.length > 1 ? '-' + S[S.length - 1].n : '') : ''); }
 function pgFile(c) { return 'Pago_internas_' + slug(c.nombre) + '_' + pgTag() + '.html'; }
 function pgExport(c) {
   var css = document.querySelector('style').textContent;
-  var fns = [esc, titleName, pgMoney, pgFecha, pgOrd, pgCls, pgFol, pgDescTxt, pgReglas, pgCur, pgSemTxt, pgTh, pgRender, pgTec, pgMsg, pgCopy, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
+  var fns = [esc, titleName, pgMoney, pgFecha, pgOrd, pgCls, pgFol, pgDescTxt, pgReglas, pgCur, pgSemTxt, pgTh, pgRender, pgTec, openMo, closeMo].map(function (f) { return f.toString(); }).join('\n');
   var data = 'var INI=0;var PG=' + JSON.stringify({ corte: PG.corte, semanas: PG.semanas, distritos: [c], vig: PG.vig, motos: PG.motos, auxR: PG.auxR }).replace(/</g, '\\u003c') + ';';
   var js = data + '\n' + fns + '\nfunction $(id){return document.getElementById(id)}\n' +
     'document.getElementById("mo").onclick=function(e){if(e.target.id==="mo")closeMo()};document.addEventListener("keydown",function(e){if(e.key==="Escape")closeMo()});document.getElementById("inview").innerHTML=pgRender(pgCur());';
@@ -445,6 +427,6 @@ function pgFol(i, j) {
     });
     h += '</tbody></table></div>';
   }
-  h += '<div class="how">Folios de la hoja Cierre Iguala con fecha de término en la semana. Si falta un folio o hay uno que no es de esta cuadrilla, márcala en "Revisar" y anótalo en observaciones.</div></div>';
+  h += '<div class="how">Folios de la hoja Cierre Iguala con fecha de término en la semana. Si falta un folio o hay uno que no es de esta cuadrilla, avísanos.</div></div>';
   openMo(h);
 }
